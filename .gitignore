@@ -1,9 +1,12 @@
-  # Binaries
-  sikifanso
-  *.exe
+# Binaries
+sikifanso
+*.exe
 
-  # GoReleaser output
-  dist/
+# GoReleaser output
+dist/
 
-  # Go
-  vendor/
+# Go
+vendor/
+
+# Logs
+*.log

@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
-	"runtime"
+	"context"
+	"log"
+	"os"
 )
 
-// These variables are set at build time by GoReleaser via -ldflags.
 var (
 	version = "dev"
 	commit  = "none"
@@ -13,6 +13,9 @@ var (
 )
 
 func main() {
-	fmt.Printf("sikifanso %s (commit: %s, built: %s)\n", version, commit, date)
-	fmt.Printf("Go %s %s/%s\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	app := newApp()
+
+	if err := app.Run(context.Background(), os.Args); err != nil {
+		log.Fatal(err)
+	}
 }
