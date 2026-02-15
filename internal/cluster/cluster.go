@@ -3,9 +3,11 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"go.uber.org/zap"
 
+	"github.com/alicanalbayrak/sikifanso/internal/cilium"
 	k3dclient "github.com/k3d-io/k3d/v5/pkg/client"
 	k3dconfig "github.com/k3d-io/k3d/v5/pkg/config"
 	configtypes "github.com/k3d-io/k3d/v5/pkg/config/types"
@@ -24,6 +26,10 @@ func Create(ctx context.Context, log *zap.Logger, name string) error {
 		return fmt.Errorf("cluster %q already exists", name)
 	}
 
+	// Prevent k3d DNS fix that breaks Docker Desktop.
+	// See: https://github.com/k3d-io/k3d/issues/1515
+	os.Setenv("K3D_FIX_DNS", "0")
+
 	log.Info("creating k3d cluster", zap.String("cluster", name))
 
 	simpleCfg := conf.SimpleConfig{
@@ -35,8 +41,26 @@ func Create(ctx context.Context, log *zap.Logger, name string) error {
 			Name: name,
 		},
 		Servers: 1,
-		Agents:  0,
-		Image:   "latest",
+		Agents:  2,
+		Image: "rancher/k3s:v1.29.1-k3s2",
+		ExposeAPI: conf.SimpleExposureOpts{
+			HostPort: "6443",
+		},
+		Ports: []conf.PortWithNodeFilters{
+			{Port: "80:30082", NodeFilters: []string{"server:*"}},
+			{Port: "443:30083", NodeFilters: []string{"server:*"}},
+			{Port: "30081:30081", NodeFilters: []string{"server:*"}},
+		},
+		Options: conf.SimpleConfigOptions{
+			K3sOptions: conf.SimpleConfigOptionsK3s{
+				ExtraArgs: []conf.K3sArgWithNodeFilters{
+					{Arg: "--flannel-backend=none", NodeFilters: []string{"server:*"}},
+					{Arg: "--disable-network-policy", NodeFilters: []string{"server:*"}},
+					{Arg: "--disable=traefik", NodeFilters: []string{"server:*"}},
+					{Arg: "--disable=servicelb", NodeFilters: []string{"server:*"}},
+				},
+			},
+		},
 	}
 
 	if err := k3dconfig.ProcessSimpleConfig(&simpleCfg); err != nil {
@@ -71,6 +95,10 @@ func Create(ctx context.Context, log *zap.Logger, name string) error {
 		OverwriteExisting:    false,
 	}); err != nil {
 		return fmt.Errorf("writing kubeconfig: %w", err)
+	}
+
+	if err := cilium.Install(ctx, log, name); err != nil {
+		return fmt.Errorf("installing cilium: %w", err)
 	}
 
 	log.Info("k3d cluster created successfully", zap.String("cluster", name))
