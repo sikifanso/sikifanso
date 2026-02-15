@@ -1,0 +1,9 @@
+  # Binaries
+  sikifanso
+  *.exe
+
+  # GoReleaser output
+  dist/
+
+  # Go
+  vendor/
