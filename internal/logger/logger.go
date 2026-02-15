@@ -14,16 +14,21 @@ func New(filePath string) (*zap.Logger, func(), error) {
 		return nil, nil, err
 	}
 
-	encoderCfg := zap.NewProductionEncoderConfig()
-	encoderCfg.TimeKey = "ts"
-	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+	consoleEncoderCfg := zap.NewProductionEncoderConfig()
+	consoleEncoderCfg.TimeKey = "ts"
+	consoleEncoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+	consoleEncoderCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
 
-	// Console: human-readable for terminal
-	consoleEncoder := zapcore.NewConsoleEncoder(encoderCfg)
+	fileEncoderCfg := zap.NewProductionEncoderConfig()
+	fileEncoderCfg.TimeKey = "ts"
+	fileEncoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+
+	// Console: human-readable for terminal with colored levels
+	consoleEncoder := zapcore.NewConsoleEncoder(consoleEncoderCfg)
 	consoleCore := zapcore.NewCore(consoleEncoder, zapcore.Lock(os.Stderr), zapcore.DebugLevel)
 
-	// File: JSON for structured log parsing
-	jsonEncoder := zapcore.NewJSONEncoder(encoderCfg)
+	// File: JSON for structured log parsing (no color codes)
+	jsonEncoder := zapcore.NewJSONEncoder(fileEncoderCfg)
 	fileCore := zapcore.NewCore(jsonEncoder, zapcore.AddSync(file), zapcore.DebugLevel)
 
 	// Tee both outputs together

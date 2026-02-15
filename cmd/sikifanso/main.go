@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 )
 
@@ -15,7 +14,13 @@ var (
 func main() {
 	app := newApp()
 
-	if err := app.Run(context.Background(), os.Args); err != nil {
-		log.Fatal(err)
+	err := app.Run(context.Background(), os.Args)
+
+	if logCleanup != nil {
+		logCleanup()
+	}
+
+	if err != nil {
+		os.Exit(1)
 	}
 }
