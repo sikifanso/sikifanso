@@ -7,6 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/alicanalbayrak/sikifanso/internal/argocd"
 	"github.com/alicanalbayrak/sikifanso/internal/cilium"
 	k3dclient "github.com/k3d-io/k3d/v5/pkg/client"
 	k3dconfig "github.com/k3d-io/k3d/v5/pkg/config"
@@ -49,6 +50,7 @@ func Create(ctx context.Context, log *zap.Logger, name string) error {
 		Ports: []conf.PortWithNodeFilters{
 			{Port: "80:30082", NodeFilters: []string{"server:*"}},
 			{Port: "443:30083", NodeFilters: []string{"server:*"}},
+			{Port: "30080:30080", NodeFilters: []string{"server:*"}},
 			{Port: "30081:30081", NodeFilters: []string{"server:*"}},
 		},
 		Options: conf.SimpleConfigOptions{
@@ -99,6 +101,10 @@ func Create(ctx context.Context, log *zap.Logger, name string) error {
 
 	if err := cilium.Install(ctx, log, name); err != nil {
 		return fmt.Errorf("installing cilium: %w", err)
+	}
+
+	if err := argocd.Install(ctx, log); err != nil {
+		return fmt.Errorf("installing argocd: %w", err)
 	}
 
 	log.Info("k3d cluster created successfully", zap.String("cluster", name))
