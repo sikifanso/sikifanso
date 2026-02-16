@@ -99,12 +99,31 @@ func Create(ctx context.Context, log *zap.Logger, name string) error {
 		return fmt.Errorf("writing kubeconfig: %w", err)
 	}
 
-	if err := cilium.Install(ctx, log, name); err != nil {
+	ciliumResult, err := cilium.Install(ctx, log, name)
+	if err != nil {
 		return fmt.Errorf("installing cilium: %w", err)
 	}
 
-	if err := argocd.Install(ctx, log); err != nil {
+	argocdVersion, err := argocd.Install(ctx, log)
+	if err != nil {
 		return fmt.Errorf("installing argocd: %w", err)
+	}
+
+	if err := argocd.CreateApplications(ctx, log,
+		argocd.AppParams{
+			Name: "cilium", Namespace: "kube-system",
+			RepoURL: "https://helm.cilium.io/", ChartName: "cilium",
+			ChartVersion: ciliumResult.ChartVersion,
+			Values:       cilium.Values(ciliumResult.APIServerIP),
+		},
+		argocd.AppParams{
+			Name: "argocd", Namespace: "argocd",
+			RepoURL: "https://argoproj.github.io/argo-helm", ChartName: "argo-cd",
+			ChartVersion: argocdVersion,
+			Values:       argocd.Values(),
+		},
+	); err != nil {
+		return fmt.Errorf("creating argocd applications: %w", err)
 	}
 
 	log.Info("k3d cluster created successfully", zap.String("cluster", name))

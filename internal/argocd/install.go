@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/alicanalbayrak/sikifanso/internal/helm"
 	"github.com/briandowns/spinner"
 	"go.uber.org/zap"
-	"helm.sh/helm/v3/pkg/action"
-	"helm.sh/helm/v3/pkg/chart"
-	"helm.sh/helm/v3/pkg/chart/loader"
-	"helm.sh/helm/v3/pkg/cli"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -20,13 +18,19 @@ import (
 
 const (
 	namespace    = "argocd"
-	repoURL      = "https://argoproj.github.io/argo-helm"
-	chartName    = "argo-cd"
-	releaseName  = "argocd"
-	helmTimeout  = 5 * time.Minute
 	readyTimeout = 3 * time.Minute
 	pollInterval = 5 * time.Second
 )
+
+var helmParams = helm.InstallParams{
+	Namespace:     namespace,
+	RepoURL:       "https://argoproj.github.io/argo-helm",
+	ChartName:     "argo-cd",
+	ReleaseName:   "argocd",
+	Timeout:       5 * time.Minute,
+	CreateNS:      true,
+	SpinnerSuffix: " Deploying ArgoCD to argocd namespace (this may take a few minutes)...",
+}
 
 // deploymentNames lists the ArgoCD deployments that must be Available
 // before we consider the install complete.
@@ -37,28 +41,29 @@ var deploymentNames = []string{
 }
 
 // Install deploys ArgoCD into the cluster using the Helm Go SDK.
-func Install(ctx context.Context, log *zap.Logger) error {
+// It returns the installed chart version on success.
+func Install(ctx context.Context, log *zap.Logger) (string, error) {
 	vals := Values()
 
-	cfg, settings, err := helmSetup(log)
+	cfg, settings, err := helm.Setup(log, namespace)
 	if err != nil {
-		return fmt.Errorf("helm setup: %w", err)
+		return "", fmt.Errorf("helm setup: %w", err)
 	}
 
-	log.Info("downloading argocd chart", zap.String("repo", repoURL))
-	ch, err := helmLocateChart(cfg, settings)
+	log.Info("downloading argocd chart", zap.String("repo", helmParams.RepoURL))
+	ch, err := helm.LocateChart(cfg, settings, helmParams)
 	if err != nil {
-		return fmt.Errorf("locating argocd chart: %w", err)
+		return "", fmt.Errorf("locating argocd chart: %w", err)
 	}
 	log.Info("chart downloaded", zap.String("version", ch.Metadata.Version))
 
-	if err := helmDeploy(ctx, cfg, ch, vals); err != nil {
-		return fmt.Errorf("helm install argocd: %w", err)
+	if err := helm.Deploy(ctx, cfg, ch, vals, helmParams); err != nil {
+		return "", fmt.Errorf("helm install argocd: %w", err)
 	}
 	log.Info("argocd helm release deployed")
 
-	if err := waitForDeployments(ctx, log); err != nil {
-		return fmt.Errorf("waiting for argocd deployments: %w", err)
+	if err := waitForDeployments(ctx); err != nil {
+		return "", fmt.Errorf("waiting for argocd deployments: %w", err)
 	}
 	log.Info("argocd deployments are ready")
 
@@ -70,62 +75,12 @@ func Install(ctx context.Context, log *zap.Logger) error {
 		printAccessInfo(password)
 	}
 
-	return nil
-}
-
-// helmSetup initialises Helm's action configuration and CLI settings.
-func helmSetup(log *zap.Logger) (*action.Configuration, *cli.EnvSettings, error) {
-	settings := cli.New()
-	cfg := &action.Configuration{}
-	if err := cfg.Init(settings.RESTClientGetter(), namespace, "secret", func(format string, v ...interface{}) {
-		log.Debug(fmt.Sprintf(format, v...))
-	}); err != nil {
-		return nil, nil, fmt.Errorf("initializing helm config: %w", err)
-	}
-	return cfg, settings, nil
-}
-
-// helmLocateChart downloads and loads the ArgoCD chart from argo-helm.
-func helmLocateChart(cfg *action.Configuration, settings *cli.EnvSettings) (*chart.Chart, error) {
-	install := action.NewInstall(cfg)
-	install.ReleaseName = releaseName
-	install.Namespace = namespace
-	install.RepoURL = repoURL
-
-	chartPath, err := install.ChartPathOptions.LocateChart(chartName, settings)
-	if err != nil {
-		return nil, fmt.Errorf("locating argocd chart: %w", err)
-	}
-	ch, err := loader.Load(chartPath)
-	if err != nil {
-		return nil, fmt.Errorf("loading argocd chart: %w", err)
-	}
-	return ch, nil
-}
-
-// helmDeploy runs the Helm install with a spinner for visual feedback.
-func helmDeploy(ctx context.Context, cfg *action.Configuration, ch *chart.Chart, vals map[string]interface{}) error {
-	install := action.NewInstall(cfg)
-	install.ReleaseName = releaseName
-	install.Namespace = namespace
-	install.CreateNamespace = true
-	install.Wait = true
-	install.Timeout = helmTimeout
-
-	s := spinner.New(spinner.CharSets[11], 120*time.Millisecond, spinner.WithWriter(os.Stderr))
-	s.Suffix = " Deploying ArgoCD to argocd namespace (this may take a few minutes)..."
-	s.Start()
-	_, err := install.RunWithContext(ctx, ch, vals)
-	s.Stop()
-	if err != nil {
-		return fmt.Errorf("running helm install: %w", err)
-	}
-	return nil
+	return ch.Metadata.Version, nil
 }
 
 // waitForDeployments polls the key ArgoCD deployments until they all
 // report the Available condition, or the timeout expires.
-func waitForDeployments(ctx context.Context, _ *zap.Logger) error {
+func waitForDeployments(ctx context.Context) error {
 	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
 	if err != nil {
 		return fmt.Errorf("building kubeconfig: %w", err)
@@ -141,7 +96,9 @@ func waitForDeployments(ctx context.Context, _ *zap.Logger) error {
 	s.Start()
 	defer s.Stop()
 
-	deadline := time.Now().Add(readyTimeout)
+	ctx, cancel := context.WithTimeout(ctx, readyTimeout)
+	defer cancel()
+
 	for {
 		ready := 0
 		for _, name := range deploymentNames {
@@ -161,13 +118,9 @@ func waitForDeployments(ctx context.Context, _ *zap.Logger) error {
 			return nil
 		}
 
-		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out waiting for argocd deployments (%d/%d ready)", ready, total)
-		}
-
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("timed out waiting for argocd deployments (%d/%d ready)", ready, total)
 		case <-time.After(pollInterval):
 		}
 	}
@@ -212,13 +165,41 @@ func extractAdminPassword(ctx context.Context) (string, error) {
 // printAccessInfo prints ArgoCD access details to stderr (matches project
 // convention: spinners/UI output goes to stderr).
 func printAccessInfo(password string) {
+	const (
+		urlLine  = "URL:      http://localhost:30080"
+		userLine = "User:     admin"
+	)
+	passLine := "Password: " + password
+
+	// Determine the widest content line for dynamic box width.
+	width := len(urlLine)
+	if len(userLine) > width {
+		width = len(userLine)
+	}
+	if len(passLine) > width {
+		width = len(passLine)
+	}
+	width += 4 // 2-char padding on each side
+
+	hBar := strings.Repeat("─", width)
+	titlePad := width - len("ArgoCD Access Info")
+	leftPad := titlePad / 2
+	rightPad := titlePad - leftPad
+
 	fmt.Fprintf(os.Stderr, "\n"+
-		"╭─────────────────────────────────────────╮\n"+
-		"│           ArgoCD Access Info            │\n"+
-		"├─────────────────────────────────────────┤\n"+
-		"│  URL:      http://localhost:30080       │\n"+
-		"│  User:     admin                        │\n"+
-		"│  Password: %-29s│\n"+
-		"╰─────────────────────────────────────────╯\n\n",
-		password)
+		"╭%s╮\n"+
+		"│%s%s%s│\n"+
+		"├%s┤\n"+
+		"│  %-*s  │\n"+
+		"│  %-*s  │\n"+
+		"│  %-*s  │\n"+
+		"╰%s╯\n\n",
+		hBar,
+		strings.Repeat(" ", leftPad), "ArgoCD Access Info", strings.Repeat(" ", rightPad),
+		hBar,
+		width-4, urlLine,
+		width-4, userLine,
+		width-4, passLine,
+		hBar,
+	)
 }

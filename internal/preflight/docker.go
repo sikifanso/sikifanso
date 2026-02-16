@@ -11,13 +11,13 @@ import (
 func CheckDocker(ctx context.Context) error {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return fmt.Errorf("failed to create docker client: %w", err)
+		return fmt.Errorf("creating docker client: %w", err)
 	}
 	defer cli.Close()
 
 	_, err = cli.Ping(ctx)
 	if err != nil {
-		return fmt.Errorf("docker daemon is not running: %w", err)
+		return fmt.Errorf("pinging docker daemon: %w", err)
 	}
 
 	return nil
