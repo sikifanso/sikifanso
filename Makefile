@@ -11,6 +11,7 @@ run:
 # Remove build artifacts
 clean:
 	rm -f sikifanso
+	rm sikifanso.log
 	rm -rf dist/
 
 # GoReleaser: build snapshot (cross-platform, no publish)
