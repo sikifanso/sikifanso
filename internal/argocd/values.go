@@ -122,6 +122,9 @@ return hs
 			},
 			"secret": map[string]interface{}{
 				"createSecret": true,
+				"extra": map[string]interface{}{
+					"server.secretkey": "sikifanso",
+				},
 			},
 			"rbac": map[string]interface{}{
 				"policy.default": "role:readonly",
