@@ -63,11 +63,11 @@ After creation you'll see:
 ├──────────────────────────────────────────┤
 │ State:           running                 │
 │                                          │
-│ ArgoCD URL:      http://localhost:30080   │
+│ ArgoCD URL:      http://localhost:30080  │
 │ ArgoCD User:     admin                   │
 │ ArgoCD Password: ••••••••                │
 │                                          │
-│ Hubble URL:      http://localhost:30081   │
+│ Hubble URL:      http://localhost:30081  │
 │                                          │
 │ GitOps Path:     ~/.sikifanso/clusters/… │
 ╰──────────────────────────────────────────╯
