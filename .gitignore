@@ -10,3 +10,7 @@ vendor/
 
 # Logs
 *.log
+
+# Docs
+site/
+.venv/

@@ -1,0 +1,69 @@
+site_name: sikifanso
+site_url: https://sikifanso.com
+site_description: Bootstrap a fully functional homelab Kubernetes cluster with a single command
+repo_url: https://github.com/sikifanso/sikifanso
+repo_name: sikifanso/sikifanso
+
+theme:
+  name: material
+  logo: assets/logo.png
+  favicon: assets/logo.png
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    code: JetBrains Mono
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.code.select
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Guides:
+      - Multi-Cluster: guides/multi-cluster.md
+      - Custom Bootstrap Repos: guides/custom-bootstrap.md
+      - Remote GitOps: guides/remote-gitops.md
+  - Architecture: architecture.md
+  - CLI Reference: cli.md
+  - Roadmap: roadmap.md
+  - Contributing to Docs: contributing-docs.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/sikifanso/sikifanso

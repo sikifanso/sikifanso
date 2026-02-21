@@ -29,11 +29,16 @@ sikifanso cluster create
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) (running)
-- [Go 1.25+](https://go.dev/dl/) (to build)
 
-That's it. k3d, Helm, Cilium, and ArgoCD are all handled internally.
+That's it. You do **not** need to install k3d, Helm, Cilium, ArgoCD, or any other Kubernetes tooling. sikifanso embeds everything and handles the full stack internally.
 
 ## Install
+
+```bash
+brew install sikifanso/tap/sikifanso
+```
+
+Or with Go:
 
 ```bash
 go install github.com/sikifanso/sikifanso/cmd/sikifanso@latest
