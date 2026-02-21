@@ -3,12 +3,14 @@
 </p>
 
 <h1 align="center">sikifanso</h1>
-
 <p align="center">
-  Bootstrap homelab Kubernetes clusters with Cilium and ArgoCD in a single command
+  <a href="https://github.com/sikifanso/sikifanso/releases/latest"><img src="https://img.shields.io/github/v/release/sikifanso/sikifanso?color=blue" alt="Release"></a>
+  <a href="https://pkg.go.dev/github.com/sikifanso/sikifanso"><img src="https://img.shields.io/badge/go-1.25+-00ADD8?logo=go" alt="Go version"></a>
+</p>
+<p align="center">
+  <img src="assets/demo.gif" alt="demo" width="800">
 </p>
 
----
 
 A CLI tool that bootstraps a fully functional homelab Kubernetes cluster with a single command. Spins up a [k3d](https://k3d.io) cluster pre-configured with [Cilium](https://cilium.io) (eBPF networking, ingress, Hubble observability) and [ArgoCD](https://argoproj.github.io/cd/) (GitOps from a local git repository).
 
