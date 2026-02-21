@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/docker/docker v27.0.3+incompatible
+	github.com/fatih/color v1.14.1
 	github.com/go-git/go-git/v5 v5.16.5
 	github.com/k3d-io/k3d/v5 v5.8.3
 	github.com/sirupsen/logrus v1.9.3
@@ -56,7 +57,6 @@ require (
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/evanphx/json-patch v5.9.11+incompatible // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
-	github.com/fatih/color v1.14.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fvbommel/sortorder v1.1.0 // indirect

@@ -43,7 +43,25 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 		return nil, fmt.Errorf("cluster %q already exists", name)
 	}
 
+	// Resolve host ports — tries defaults first, falls back to free ports.
+	hp, err := resolveHostPorts()
+	if err != nil {
+		return nil, fmt.Errorf("resolving host ports: %w", err)
+	}
+	log.Info("resolved host ports",
+		zap.Int("apiServer", hp.APIServer),
+		zap.Int("http", hp.HTTP),
+		zap.Int("https", hp.HTTPS),
+		zap.Int("argocdUI", hp.ArgoCDUI),
+		zap.Int("hubbleUI", hp.HubbleUI),
+	)
+
 	// Scaffold gitops repo before cluster creation so the directory exists for the volume mount.
+	// Remove any stale session directory left over from a previous failed creation.
+	if err := session.Remove(name); err != nil {
+		log.Warn("failed to clean up stale session directory", zap.Error(err))
+	}
+
 	gitopsDir, err := session.GitOpsDir(name)
 	if err != nil {
 		return nil, fmt.Errorf("resolving gitops directory: %w", err)
@@ -70,13 +88,13 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 		Agents:  k3dAgents,
 		Image:   k3sImage,
 		ExposeAPI: conf.SimpleExposureOpts{
-			HostPort: "6443",
+			HostPort: fmt.Sprintf("%d", hp.APIServer),
 		},
 		Ports: []conf.PortWithNodeFilters{
-			{Port: "80:30082", NodeFilters: []string{"server:*"}},
-			{Port: "443:30083", NodeFilters: []string{"server:*"}},
-			{Port: "30080:30080", NodeFilters: []string{"server:*"}},
-			{Port: "30081:30081", NodeFilters: []string{"server:*"}},
+			{Port: fmt.Sprintf("%d:30082", hp.HTTP), NodeFilters: []string{"server:*"}},
+			{Port: fmt.Sprintf("%d:30083", hp.HTTPS), NodeFilters: []string{"server:*"}},
+			{Port: fmt.Sprintf("%d:30080", hp.ArgoCDUI), NodeFilters: []string{"server:*"}},
+			{Port: fmt.Sprintf("%d:30081", hp.HubbleUI), NodeFilters: []string{"server:*"}},
 		},
 		Volumes: []conf.VolumeWithNodeFilters{
 			{
@@ -165,18 +183,19 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 	// Build and save session.
 	sess := &session.Session{
 		ClusterName:  name,
+		State:        "running",
 		CreatedAt:    time.Now(),
 		BootstrapURL: opts.BootstrapURL,
 		GitOpsPath:   gitopsDir,
 		Services: session.ServiceInfo{
 			ArgoCD: session.ArgoCDInfo{
-				URL:          "http://localhost:30080",
+				URL:          fmt.Sprintf("http://localhost:%d", hp.ArgoCDUI),
 				Username:     "admin",
 				Password:     argocdResult.AdminPassword,
 				ChartVersion: argocdResult.ChartVersion,
 			},
 			Hubble: session.HubbleInfo{
-				URL: "http://localhost:30081",
+				URL: fmt.Sprintf("http://localhost:%d", hp.HubbleUI),
 			},
 		},
 		K3dConfig: session.K3dConfigInfo{
@@ -220,6 +239,78 @@ func Delete(ctx context.Context, log *zap.Logger, name string) error {
 	}
 
 	log.Info("k3d cluster deleted successfully", zap.String("cluster", name))
+	return nil
+}
+
+// Stop stops a running k3d cluster and updates the session state.
+func Stop(ctx context.Context, log *zap.Logger, name string) error {
+	log.Info("looking up k3d cluster", zap.String("cluster", name))
+
+	cluster, err := k3dclient.ClusterGet(ctx, k3drt.Docker, &k3d.Cluster{Name: name})
+	if err != nil {
+		return fmt.Errorf("cluster %q not found: %w", name, err)
+	}
+
+	log.Info("stopping k3d cluster", zap.String("cluster", name))
+
+	if err := k3dclient.ClusterStop(ctx, k3drt.Docker, cluster); err != nil {
+		return fmt.Errorf("stopping cluster %q: %w", name, err)
+	}
+
+	sess, err := session.Load(name)
+	if err != nil {
+		log.Warn("failed to load session", zap.Error(err))
+	} else {
+		sess.State = "stopped"
+		if err := session.Save(sess); err != nil {
+			log.Warn("failed to save session", zap.Error(err))
+		}
+	}
+
+	log.Info("k3d cluster stopped successfully", zap.String("cluster", name))
+	return nil
+}
+
+// Start starts a stopped k3d cluster and updates the session state.
+func Start(ctx context.Context, log *zap.Logger, name string) error {
+	log.Info("looking up k3d cluster", zap.String("cluster", name))
+
+	cluster, err := k3dclient.ClusterGet(ctx, k3drt.Docker, &k3d.Cluster{Name: name})
+	if err != nil {
+		return fmt.Errorf("cluster %q not found: %w", name, err)
+	}
+
+	// Prevent k3d DNS fix that breaks Docker Desktop.
+	// See: https://github.com/k3d-io/k3d/issues/1515
+	os.Setenv("K3D_FIX_DNS", "0")
+
+	// Gather environment info (host gateway IP etc.) required by ClusterStart
+	// for host alias injection into CoreDNS.
+	envInfo, err := k3dclient.GatherEnvironmentInfo(ctx, k3drt.Docker, cluster)
+	if err != nil {
+		return fmt.Errorf("gathering environment info: %w", err)
+	}
+
+	log.Info("starting k3d cluster", zap.String("cluster", name))
+
+	if err := k3dclient.ClusterStart(ctx, k3drt.Docker, cluster, k3d.ClusterStartOpts{
+		WaitForServer:   true,
+		EnvironmentInfo: envInfo,
+	}); err != nil {
+		return fmt.Errorf("starting cluster %q: %w", name, err)
+	}
+
+	sess, err := session.Load(name)
+	if err != nil {
+		log.Warn("failed to load session", zap.Error(err))
+	} else {
+		sess.State = "running"
+		if err := session.Save(sess); err != nil {
+			log.Warn("failed to save session", zap.Error(err))
+		}
+	}
+
+	log.Info("k3d cluster started successfully", zap.String("cluster", name))
 	return nil
 }
 

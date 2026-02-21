@@ -12,6 +12,7 @@ import (
 // Session holds persisted metadata for a sikifanso cluster.
 type Session struct {
 	ClusterName  string        `json:"clusterName"`
+	State        string        `json:"state"`
 	CreatedAt    time.Time     `json:"createdAt"`
 	BootstrapURL string        `json:"bootstrapURL"`
 	GitOpsPath   string        `json:"gitOpsPath"`
@@ -112,6 +113,36 @@ func Load(clusterName string) (*Session, error) {
 		return nil, fmt.Errorf("unmarshaling session: %w", err)
 	}
 	return &s, nil
+}
+
+// ListAll returns sessions for every cluster that has a saved session file.
+func ListAll() ([]*Session, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("getting home directory: %w", err)
+	}
+
+	clustersRoot := filepath.Join(home, baseDir, clusterDir)
+	entries, err := os.ReadDir(clustersRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("reading clusters directory: %w", err)
+	}
+
+	var sessions []*Session
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		s, err := Load(e.Name())
+		if err != nil {
+			continue // skip directories without a valid session
+		}
+		sessions = append(sessions, s)
+	}
+	return sessions, nil
 }
 
 // Remove deletes the entire session directory for the given cluster name.
