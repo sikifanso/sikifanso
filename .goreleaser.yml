@@ -25,22 +25,20 @@ builds:
       - -X main.date={{.Date}}
 
 archives:
-  - format: tar.gz
+  - formats:
+      - tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
 
-brews:
+homebrew_casks:
   - repository:
       owner: sikifanso
       name: homebrew-tap
     homepage: https://github.com/sikifanso/sikifanso
     description: Bootstrap homelab Kubernetes clusters with Cilium and ArgoCD in a single command
-    install: |
-      bin.install "sikifanso"
-    test: |
-      system "#{bin}/sikifanso", "--version"
 
 checksum:
   name_template: "checksums.txt"
