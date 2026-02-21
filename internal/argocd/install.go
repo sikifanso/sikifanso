@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/alicanalbayrak/sikifanso/internal/helm"
@@ -15,6 +14,12 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+// InstallResult holds metadata from a successful ArgoCD install.
+type InstallResult struct {
+	ChartVersion  string
+	AdminPassword string
+}
 
 const (
 	namespace    = "argocd"
@@ -41,41 +46,43 @@ var deploymentNames = []string{
 }
 
 // Install deploys ArgoCD into the cluster using the Helm Go SDK.
-// It returns the installed chart version on success.
-func Install(ctx context.Context, log *zap.Logger) (string, error) {
+// It returns an InstallResult with chart version and admin password.
+func Install(ctx context.Context, log *zap.Logger) (*InstallResult, error) {
 	vals := Values()
 
 	cfg, settings, err := helm.Setup(log, namespace)
 	if err != nil {
-		return "", fmt.Errorf("helm setup: %w", err)
+		return nil, fmt.Errorf("helm setup: %w", err)
 	}
 
 	log.Info("downloading argocd chart", zap.String("repo", helmParams.RepoURL))
 	ch, err := helm.LocateChart(cfg, settings, helmParams)
 	if err != nil {
-		return "", fmt.Errorf("locating argocd chart: %w", err)
+		return nil, fmt.Errorf("locating argocd chart: %w", err)
 	}
 	log.Info("chart downloaded", zap.String("version", ch.Metadata.Version))
 
 	if err := helm.Deploy(ctx, cfg, ch, vals, helmParams); err != nil {
-		return "", fmt.Errorf("helm install argocd: %w", err)
+		return nil, fmt.Errorf("helm install argocd: %w", err)
 	}
 	log.Info("argocd helm release deployed")
 
 	if err := waitForDeployments(ctx); err != nil {
-		return "", fmt.Errorf("waiting for argocd deployments: %w", err)
+		return nil, fmt.Errorf("waiting for argocd deployments: %w", err)
 	}
 	log.Info("argocd deployments are ready")
+
+	result := &InstallResult{ChartVersion: ch.Metadata.Version}
 
 	password, err := extractAdminPassword(ctx)
 	if err != nil {
 		log.Warn("could not extract admin password", zap.Error(err))
 	} else {
 		log.Info("argocd admin password extracted")
-		printAccessInfo(password)
+		result.AdminPassword = password
 	}
 
-	return ch.Metadata.Version, nil
+	return result, nil
 }
 
 // waitForDeployments polls the key ArgoCD deployments until they all
@@ -162,44 +169,3 @@ func extractAdminPassword(ctx context.Context) (string, error) {
 	return string(password), nil
 }
 
-// printAccessInfo prints ArgoCD access details to stderr (matches project
-// convention: spinners/UI output goes to stderr).
-func printAccessInfo(password string) {
-	const (
-		urlLine  = "URL:      http://localhost:30080"
-		userLine = "User:     admin"
-	)
-	passLine := "Password: " + password
-
-	// Determine the widest content line for dynamic box width.
-	width := len(urlLine)
-	if len(userLine) > width {
-		width = len(userLine)
-	}
-	if len(passLine) > width {
-		width = len(passLine)
-	}
-	width += 4 // 2-char padding on each side
-
-	hBar := strings.Repeat("─", width)
-	titlePad := width - len("ArgoCD Access Info")
-	leftPad := titlePad / 2
-	rightPad := titlePad - leftPad
-
-	fmt.Fprintf(os.Stderr, "\n"+
-		"╭%s╮\n"+
-		"│%s%s%s│\n"+
-		"├%s┤\n"+
-		"│  %-*s  │\n"+
-		"│  %-*s  │\n"+
-		"│  %-*s  │\n"+
-		"╰%s╯\n\n",
-		hBar,
-		strings.Repeat(" ", leftPad), "ArgoCD Access Info", strings.Repeat(" ", rightPad),
-		hBar,
-		width-4, urlLine,
-		width-4, userLine,
-		width-4, passLine,
-		hBar,
-	)
-}

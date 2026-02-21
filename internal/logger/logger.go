@@ -8,7 +8,8 @@ import (
 )
 
 // New creates a zap logger that writes to both stderr and the given file path.
-func New(filePath string) (*zap.Logger, func(), error) {
+// consoleLevel controls the minimum level for terminal output; the file always logs at DebugLevel.
+func New(filePath string, consoleLevel zapcore.Level) (*zap.Logger, func(), error) {
 	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, nil, err
@@ -25,7 +26,7 @@ func New(filePath string) (*zap.Logger, func(), error) {
 
 	// Console: human-readable for terminal with colored levels
 	consoleEncoder := zapcore.NewConsoleEncoder(consoleEncoderCfg)
-	consoleCore := zapcore.NewCore(consoleEncoder, zapcore.Lock(os.Stderr), zapcore.DebugLevel)
+	consoleCore := zapcore.NewCore(consoleEncoder, zapcore.Lock(os.Stderr), consoleLevel)
 
 	// File: JSON for structured log parsing (no color codes)
 	jsonEncoder := zapcore.NewJSONEncoder(fileEncoderCfg)

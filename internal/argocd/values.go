@@ -22,11 +22,27 @@ func Values() map[string]interface{} {
 			},
 		},
 
-		// Repo server.
+		// Repo server — with hostPath volume for local gitops repo.
 		"repoServer": map[string]interface{}{
 			"resources": map[string]interface{}{
 				"requests": map[string]interface{}{"cpu": "50m", "memory": "128Mi"},
 				"limits":   map[string]interface{}{"cpu": "500m", "memory": "512Mi"},
+			},
+			"volumes": []interface{}{
+				map[string]interface{}{
+					"name": "gitops",
+					"hostPath": map[string]interface{}{
+						"path": "/local-gitops",
+						"type": "Directory",
+					},
+				},
+			},
+			"volumeMounts": []interface{}{
+				map[string]interface{}{
+					"name":      "gitops",
+					"mountPath": "/local-gitops",
+					"readOnly":  true,
+				},
 			},
 		},
 
@@ -74,8 +90,14 @@ func Values() map[string]interface{} {
 			},
 		},
 
-		// Configs: CM, params, secret, RBAC.
+		// Configs: CM, params, secret, RBAC, repositories.
 		"configs": map[string]interface{}{
+			"repositories": map[string]interface{}{
+				"local-gitops": map[string]interface{}{
+					"type": "git",
+					"url":  "/local-gitops",
+				},
+			},
 			"cm": map[string]interface{}{
 				"admin.enabled":                          "true",
 				"timeout.reconciliation":                 "180s",
