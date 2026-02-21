@@ -23,6 +23,13 @@ builds:
       - -X main.version={{.Version}}
       - -X main.commit={{.Commit}}
       - -X main.date={{.Date}}
+    hooks:
+      post:
+        - cmd: >-
+            {{- if eq .Os "darwin" }}
+            codesign --force --options runtime --sign "{{ .Env.APPLE_IDENTITY }}" --timestamp "{{ .Path }}"
+            {{- end }}
+          output: true
 
 archives:
   - formats:
@@ -33,7 +40,7 @@ archives:
         formats:
           - zip
 
-homebrew_casks:
+brews:
   - repository:
       owner: sikifanso
       name: homebrew-tap
