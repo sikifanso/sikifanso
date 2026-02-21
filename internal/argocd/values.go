@@ -83,7 +83,8 @@ func Values() map[string]interface{} {
 
 		// ApplicationSet controller.
 		"applicationSet": map[string]interface{}{
-			"enabled": true,
+			"enabled":   true,
+			"extraArgs": []string{"--repo-server-plaintext"},
 			"resources": map[string]interface{}{
 				"requests": map[string]interface{}{"cpu": "25m", "memory": "64Mi"},
 				"limits":   map[string]interface{}{"cpu": "200m", "memory": "256Mi"},
