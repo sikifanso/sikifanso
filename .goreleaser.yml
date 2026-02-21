@@ -37,6 +37,7 @@ homebrew_casks:
   - repository:
       owner: sikifanso
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: https://github.com/sikifanso/sikifanso
     description: Bootstrap homelab Kubernetes clusters with Cilium and ArgoCD in a single command
 
