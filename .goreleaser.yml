@@ -31,6 +31,17 @@ archives:
       - goos: windows
         format: zip
 
+brews:
+  - repository:
+      owner: sikifanso
+      name: homebrew-tap
+    homepage: https://github.com/sikifanso/sikifanso
+    description: Bootstrap homelab Kubernetes clusters with Cilium and ArgoCD in a single command
+    install: |
+      bin.install "sikifanso"
+    test: |
+      system "#{bin}/sikifanso", "--version"
+
 checksum:
   name_template: "checksums.txt"
 

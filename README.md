@@ -189,7 +189,3 @@ Cluster metadata is persisted to `~/.sikifanso/clusters/<name>/session.yaml` and
 - GitOps repo path
 - k3d configuration (image, node counts)
 - Bootstrap template URL
-
-## License
-
-MIT
