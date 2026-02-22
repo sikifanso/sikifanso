@@ -11,10 +11,11 @@ import (
 
 func clusterDeleteCmd() *cli.Command {
 	return &cli.Command{
-		Name:      "delete",
-		Usage:     "Delete an existing k3d cluster",
-		ArgsUsage: "[NAME]",
-		Action:    clusterDeleteAction,
+		Name:          "delete",
+		Usage:         "Delete an existing k3d cluster",
+		ArgsUsage:     "[NAME]",
+		Action:        clusterDeleteAction,
+		ShellComplete: clusterNameShellComplete,
 	}
 }
 

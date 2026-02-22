@@ -12,10 +12,11 @@ import (
 
 func clusterInfoCmd() *cli.Command {
 	return &cli.Command{
-		Name:      "info",
-		Usage:     "Show cluster access info and service details",
-		ArgsUsage: "[NAME]",
-		Action:    clusterInfoAction,
+		Name:          "info",
+		Usage:         "Show cluster access info and service details",
+		ArgsUsage:     "[NAME]",
+		Action:        clusterInfoAction,
+		ShellComplete: clusterNameShellComplete,
 	}
 }
 

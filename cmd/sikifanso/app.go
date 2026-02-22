@@ -8,6 +8,9 @@ func newApp() *cli.Command {
 		Usage:   "A CLI tool for homelab k8s bootstrap",
 		Version:               version,
 		EnableShellCompletion: true,
+		ConfigureShellCompletionCommand: func(cmd *cli.Command) {
+			cmd.Hidden = false
+		},
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "log-file",
@@ -28,6 +31,6 @@ func newApp() *cli.Command {
 			},
 		},
 		Before:   setupAction,
-		Commands: []*cli.Command{clusterCmd(), argocdCmd()},
+		Commands: []*cli.Command{clusterCmd(), argocdCmd(), statusCmd()},
 	}
 }

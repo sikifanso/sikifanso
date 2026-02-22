@@ -11,10 +11,11 @@ import (
 
 func clusterStartCmd() *cli.Command {
 	return &cli.Command{
-		Name:      "start",
-		Usage:     "Start a stopped k3d cluster",
-		ArgsUsage: "[NAME]",
-		Action:    clusterStartAction,
+		Name:          "start",
+		Usage:         "Start a stopped k3d cluster",
+		ArgsUsage:     "[NAME]",
+		Action:        clusterStartAction,
+		ShellComplete: clusterNameShellComplete,
 	}
 }
 
