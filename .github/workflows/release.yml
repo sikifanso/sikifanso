@@ -20,6 +20,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
       - name: Import signing certificate
         env:
@@ -63,17 +64,30 @@ jobs:
         run: |
           for bin in dist/sikifanso_darwin_*/sikifanso; do
             [ -f "$bin" ] || continue
-            echo "Notarizing $bin..."
+            echo "=== Verifying code signature: $bin ==="
+            codesign -vvv --deep --strict "$bin"
 
+            echo "=== Notarizing: $bin ==="
             ZIP_FILE="${bin}.zip"
             ditto -c -k "$bin" "$ZIP_FILE"
 
-            xcrun notarytool submit "$ZIP_FILE" \
+            SUBMIT_OUT=$(xcrun notarytool submit "$ZIP_FILE" \
               --apple-id "$APPLE_ID" \
               --password "$APPLE_ID_PASSWORD" \
               --team-id "$APPLE_TEAM_ID" \
               --wait \
-              --timeout 10m
+              --timeout 10m 2>&1) || true
+
+            echo "$SUBMIT_OUT"
+
+            SUBMISSION_ID=$(echo "$SUBMIT_OUT" | grep "id:" | head -1 | awk '{print $2}')
+            if [ -n "$SUBMISSION_ID" ]; then
+              echo "=== Fetching notarization log for $SUBMISSION_ID ==="
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_ID_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" || true
+            fi
 
             rm "$ZIP_FILE"
           done
