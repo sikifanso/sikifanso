@@ -48,6 +48,9 @@ That's it. You do **not** need to install k3d, Helm, Cilium, ArgoCD, or any othe
 
 ## Install
 
+!!! warning "macOS notarization pending"
+    macOS binaries are currently pending Apple notarization. If you see a Gatekeeper warning, use `brew install --cask --no-quarantine sikifanso/tap/sikifanso` or build from source instead.
+
 === "Homebrew"
 
     ```bash

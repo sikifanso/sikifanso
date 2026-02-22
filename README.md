@@ -34,6 +34,8 @@ That's it. You do **not** need to install k3d, Helm, Cilium, ArgoCD, or any othe
 
 ## Install
 
+> **Note:** macOS binaries are currently pending Apple notarization. If you see a Gatekeeper warning, you can install with `brew install --cask --no-quarantine sikifanso/tap/sikifanso` or build from source instead.
+
 ```bash
 brew install --cask sikifanso/tap/sikifanso
 ```
