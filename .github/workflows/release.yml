@@ -62,35 +62,69 @@ jobs:
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          SUBMISSION_IDS=()
+
+          # Submit all binaries in parallel (no --wait)
           for bin in dist/sikifanso_darwin_*/sikifanso; do
             [ -f "$bin" ] || continue
             echo "=== Verifying code signature: $bin ==="
             codesign -vvv --deep --strict "$bin"
 
-            echo "=== Notarizing: $bin ==="
+            echo "=== Submitting: $bin ==="
             ZIP_FILE="${bin}.zip"
             ditto -c -k "$bin" "$ZIP_FILE"
 
             SUBMIT_OUT=$(xcrun notarytool submit "$ZIP_FILE" \
               --apple-id "$APPLE_ID" \
               --password "$APPLE_ID_PASSWORD" \
-              --team-id "$APPLE_TEAM_ID" \
-              --wait \
-              --timeout 10m 2>&1) || true
+              --team-id "$APPLE_TEAM_ID" 2>&1)
 
             echo "$SUBMIT_OUT"
-
             SUBMISSION_ID=$(echo "$SUBMIT_OUT" | grep "id:" | head -1 | awk '{print $2}')
             if [ -n "$SUBMISSION_ID" ]; then
-              echo "=== Fetching notarization log for $SUBMISSION_ID ==="
-              xcrun notarytool log "$SUBMISSION_ID" \
-                --apple-id "$APPLE_ID" \
-                --password "$APPLE_ID_PASSWORD" \
-                --team-id "$APPLE_TEAM_ID" || true
+              SUBMISSION_IDS+=("$SUBMISSION_ID")
             fi
 
             rm "$ZIP_FILE"
           done
+
+          echo "=== Waiting for ${#SUBMISSION_IDS[@]} submissions ==="
+
+          # Wait for all submissions with retries
+          FAILED=0
+          for SID in "${SUBMISSION_IDS[@]}"; do
+            echo "--- Waiting for $SID ---"
+            for attempt in 1 2 3; do
+              if xcrun notarytool wait "$SID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_ID_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" \
+                --timeout 5m 2>&1; then
+                break
+              fi
+              echo "Attempt $attempt timed out, retrying..."
+            done
+
+            echo "--- Log for $SID ---"
+            xcrun notarytool log "$SID" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_ID_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" 2>&1 || true
+
+            STATUS=$(xcrun notarytool info "$SID" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_ID_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" 2>&1 | grep "status:" | head -1 | awk '{print $2}')
+            echo "Final status: $STATUS"
+            if [ "$STATUS" != "Accepted" ]; then
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::One or more notarizations failed"
+            exit 1
+          fi
 
       - name: Cleanup keychain
         if: always()
