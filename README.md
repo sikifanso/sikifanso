@@ -35,7 +35,7 @@ That's it. You do **not** need to install k3d, Helm, Cilium, ArgoCD, or any othe
 ## Install
 
 ```bash
-brew install sikifanso/tap/sikifanso
+brew install --cask sikifanso/tap/sikifanso
 ```
 
 Or with Go:

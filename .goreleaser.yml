@@ -40,7 +40,7 @@ archives:
         formats:
           - zip
 
-brews:
+homebrew_casks:
   - repository:
       owner: sikifanso
       name: homebrew-tap

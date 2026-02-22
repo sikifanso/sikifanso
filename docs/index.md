@@ -51,7 +51,7 @@ That's it. You do **not** need to install k3d, Helm, Cilium, ArgoCD, or any othe
 === "Homebrew"
 
     ```bash
-    brew install sikifanso/tap/sikifanso
+    brew install --cask sikifanso/tap/sikifanso
     ```
 
 === "Go"
