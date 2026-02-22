@@ -13,7 +13,7 @@ func CheckDocker(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("creating docker client: %w", err)
 	}
-	defer cli.Close()
+	defer func() { _ = cli.Close() }()
 
 	_, err = cli.Ping(ctx)
 	if err != nil {

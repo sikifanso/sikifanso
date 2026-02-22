@@ -60,7 +60,7 @@ func allAvailable(ports []int) bool {
 		if err != nil {
 			return false
 		}
-		ln.Close()
+		_ = ln.Close()
 	}
 	return true
 }
@@ -76,7 +76,7 @@ func findFreePorts(n int) ([]int, error) {
 		if err != nil {
 			// Close any already-opened listeners before returning.
 			for _, l := range listeners {
-				l.Close()
+				_ = l.Close()
 			}
 			return nil, err
 		}
@@ -85,7 +85,7 @@ func findFreePorts(n int) ([]int, error) {
 	}
 
 	for _, ln := range listeners {
-		ln.Close()
+		_ = ln.Close()
 	}
 
 	return ports, nil

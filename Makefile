@@ -1,4 +1,4 @@
-.PHONY: build run clean snapshot release-dry-run
+.PHONY: build run clean snapshot release-dry-run lint test
 
 # Build for your current platform
 build:
@@ -21,3 +21,11 @@ snapshot:
 # GoReleaser: full dry run (archives + checksums, no publish)
 release-dry-run:
 	goreleaser release --snapshot --clean
+
+# Run linter
+lint:
+	golangci-lint run ./...
+
+# Run tests with race detector
+test:
+	go test ./... -race

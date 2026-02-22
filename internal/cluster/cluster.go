@@ -72,7 +72,7 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 
 	// Prevent k3d DNS fix that breaks Docker Desktop.
 	// See: https://github.com/k3d-io/k3d/issues/1515
-	os.Setenv("K3D_FIX_DNS", "0")
+	_ = os.Setenv("K3D_FIX_DNS", "0")
 
 	log.Info("creating k3d cluster", zap.String("cluster", name))
 
@@ -282,7 +282,7 @@ func Start(ctx context.Context, log *zap.Logger, name string) error {
 
 	// Prevent k3d DNS fix that breaks Docker Desktop.
 	// See: https://github.com/k3d-io/k3d/issues/1515
-	os.Setenv("K3D_FIX_DNS", "0")
+	_ = os.Setenv("K3D_FIX_DNS", "0")
 
 	// Gather environment info (host gateway IP etc.) required by ClusterStart
 	// for host alias injection into CoreDNS.

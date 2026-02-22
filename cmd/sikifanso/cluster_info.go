@@ -31,7 +31,7 @@ func clusterInfoAction(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("listing sessions: %w", err)
 	}
 	if len(sessions) == 0 {
-		fmt.Fprintln(cmd.Root().Writer, "no clusters found — create one with: sikifanso cluster create")
+		_, _ = fmt.Fprintln(cmd.Root().Writer, "no clusters found — create one with: sikifanso cluster create")
 		return nil
 	}
 
@@ -40,7 +40,7 @@ func clusterInfoAction(ctx context.Context, cmd *cli.Command) error {
 		if err != nil {
 			zapLogger.Warn("could not check cluster status", zap.String("cluster", sess.ClusterName), zap.Error(err))
 		} else if !live {
-			fmt.Fprintf(cmd.Root().Writer, "warning: cluster %q is not currently running\n", sess.ClusterName)
+			_, _ = fmt.Fprintf(cmd.Root().Writer, "warning: cluster %q is not currently running\n", sess.ClusterName)
 		}
 		printClusterInfo(sess)
 	}
@@ -58,7 +58,7 @@ func showClusterInfo(ctx context.Context, cmd *cli.Command, name string) error {
 	if err != nil {
 		zapLogger.Warn("could not check cluster status", zap.Error(err))
 	} else if !live {
-		fmt.Fprintf(cmd.Root().Writer, "warning: cluster %q is not currently running\n", name)
+		_, _ = fmt.Fprintf(cmd.Root().Writer, "warning: cluster %q is not currently running\n", name)
 	}
 
 	printClusterInfo(sess)

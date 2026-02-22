@@ -44,7 +44,7 @@ func LocateChart(cfg *action.Configuration, settings *cli.EnvSettings, p Install
 	install.Namespace = p.Namespace
 	install.RepoURL = p.RepoURL
 
-	chartPath, err := install.ChartPathOptions.LocateChart(p.ChartName, settings)
+	chartPath, err := install.LocateChart(p.ChartName, settings)
 	if err != nil {
 		return nil, fmt.Errorf("locating chart %s: %w", p.ChartName, err)
 	}

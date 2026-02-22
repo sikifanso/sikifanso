@@ -83,7 +83,7 @@ func detectAPIServerIP(ctx context.Context, clusterName string) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("creating docker client: %w", err)
 	}
-	defer docker.Close()
+	defer func() { _ = docker.Close() }()
 
 	containerName := fmt.Sprintf("k3d-%s-server-0", clusterName)
 	info, err := docker.ContainerInspect(ctx, containerName)

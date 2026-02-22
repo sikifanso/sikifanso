@@ -53,14 +53,27 @@ const (
 	gitopsDir   = "gitops"
 )
 
-// Dir returns the session directory for the given cluster name:
-// ~/.sikifanso/clusters/<name>/
-func Dir(clusterName string) (string, error) {
+// rootDir returns the sikifanso root directory.
+// It checks SIKIFANSO_HOME first, falling back to ~/.sikifanso.
+func rootDir() (string, error) {
+	if v := os.Getenv("SIKIFANSO_HOME"); v != "" {
+		return v, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("getting home directory: %w", err)
 	}
-	return filepath.Join(home, baseDir, clusterDir, clusterName), nil
+	return filepath.Join(home, baseDir), nil
+}
+
+// Dir returns the session directory for the given cluster name:
+// ~/.sikifanso/clusters/<name>/
+func Dir(clusterName string) (string, error) {
+	root, err := rootDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, clusterDir, clusterName), nil
 }
 
 // GitOpsDir returns the gitops directory for the given cluster name:
@@ -117,12 +130,12 @@ func Load(clusterName string) (*Session, error) {
 
 // ListAll returns sessions for every cluster that has a saved session file.
 func ListAll() ([]*Session, error) {
-	home, err := os.UserHomeDir()
+	root, err := rootDir()
 	if err != nil {
-		return nil, fmt.Errorf("getting home directory: %w", err)
+		return nil, fmt.Errorf("getting root directory: %w", err)
 	}
 
-	clustersRoot := filepath.Join(home, baseDir, clusterDir)
+	clustersRoot := filepath.Join(root, clusterDir)
 	entries, err := os.ReadDir(clustersRoot)
 	if err != nil {
 		if os.IsNotExist(err) {

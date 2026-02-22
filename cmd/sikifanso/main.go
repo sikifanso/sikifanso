@@ -23,7 +23,7 @@ func main() {
 	}
 
 	if err != nil {
-		color.New(color.FgRed).Fprintf(os.Stderr, "Error: %v\n", err)
+		_, _ = color.New(color.FgRed).Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
