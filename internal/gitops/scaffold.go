@@ -28,6 +28,16 @@ func Scaffold(ctx context.Context, log *zap.Logger, repoURL, targetDir string) e
 		return fmt.Errorf("cloning bootstrap repo: %w", err)
 	}
 
+	// Ensure app directories exist (custom bootstrap repos may omit them).
+	for _, sub := range []string{
+		filepath.Join("apps", "coordinates"),
+		filepath.Join("apps", "values"),
+	} {
+		if err := os.MkdirAll(filepath.Join(targetDir, sub), 0755); err != nil {
+			return fmt.Errorf("creating %s directory: %w", sub, err)
+		}
+	}
+
 	// Strip upstream history.
 	gitDir := filepath.Join(targetDir, ".git")
 	if err := os.RemoveAll(gitDir); err != nil {
