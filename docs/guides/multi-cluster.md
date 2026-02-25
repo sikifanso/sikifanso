@@ -62,22 +62,16 @@ Each cluster has its own gitops repo at:
 ~/.sikifanso/clusters/<name>/gitops/
 ```
 
-Deploy different apps to different clusters by managing each gitops repo independently:
+Deploy different apps to different clusters using the `--cluster` flag:
 
 ```bash
 # Deploy podinfo to lab1
-mkdir -p ~/.sikifanso/clusters/lab1/gitops/apps/podinfo
-cat > ~/.sikifanso/clusters/lab1/gitops/apps/podinfo/config.yaml <<EOF
-name: podinfo
-repoURL: https://stefanprodan.github.io/podinfo
-chart: podinfo
-targetRevision: 6.10.1
-namespace: podinfo
-EOF
-
-cd ~/.sikifanso/clusters/lab1/gitops
-git add . && git commit -m "add podinfo"
-sikifanso argocd sync --cluster lab1
+sikifanso app add podinfo \
+  --repo https://stefanprodan.github.io/podinfo \
+  --chart podinfo \
+  --version 6.10.1 \
+  --namespace podinfo \
+  --cluster lab1
 ```
 
 ## Deleting a specific cluster

@@ -38,64 +38,38 @@ Open the **Hubble URL** to see real-time network traffic in your cluster.
 
 ## Deploy an app
 
-Apps are defined as Helm chart references in your gitops repo. Let's deploy [podinfo](https://github.com/stefanprodan/podinfo) as an example.
-
-### 1. Create the app directory
+Let's deploy [podinfo](https://github.com/stefanprodan/podinfo) as an example.
 
 ```bash
-mkdir -p ~/.sikifanso/clusters/default/gitops/apps/podinfo
+sikifanso app add podinfo \
+  --repo https://stefanprodan.github.io/podinfo \
+  --chart podinfo \
+  --version 6.10.1 \
+  --namespace podinfo
 ```
 
-### 2. Add a config.yaml
+This writes the chart coordinates and a stub values file to your gitops repo, auto-commits, and triggers an ArgoCD sync. If you omit any flags, the CLI prompts interactively.
+
+Verify with:
 
 ```bash
-cat > ~/.sikifanso/clusters/default/gitops/apps/podinfo/config.yaml <<EOF
-name: podinfo
-repoURL: https://stefanprodan.github.io/podinfo
-chart: podinfo
-targetRevision: 6.10.1
-namespace: podinfo
-EOF
-```
-
-### 3. Commit the change
-
-```bash
-cd ~/.sikifanso/clusters/default/gitops
-git add . && git commit -m "add podinfo"
-```
-
-### 4. Sync
-
-ArgoCD picks up changes within ~3 minutes automatically. To force immediate sync:
-
-```bash
-sikifanso argocd sync
-```
-
-### 5. Verify
-
-```bash
-kubectl get applications -n argocd
+sikifanso app list
 ```
 
 ```
-NAME      SYNC STATUS   HEALTH STATUS
-argocd    Synced        Healthy
-cilium    Synced        Healthy
-podinfo   Synced        Healthy
+NAME                 CHART           VERSION    NAMESPACE
+podinfo              podinfo         6.10.1     podinfo
 ```
+
+You can also create the files manually under `apps/coordinates/` and `apps/values/` in your gitops repo — see [Architecture](architecture.md) for the file format.
 
 ## Remove an app
 
-Delete the app directory from your gitops repo, commit, and sync:
-
 ```bash
-rm -rf ~/.sikifanso/clusters/default/gitops/apps/podinfo
-cd ~/.sikifanso/clusters/default/gitops
-git add . && git commit -m "remove podinfo"
-sikifanso argocd sync
+sikifanso app remove podinfo
 ```
+
+This deletes the coordinate and values files, auto-commits, and triggers an ArgoCD sync.
 
 ## Manage your cluster
 

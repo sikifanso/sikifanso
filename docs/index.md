@@ -36,7 +36,7 @@ sikifanso cluster create
 - **Cilium** — full kube-proxy replacement, ingress controller, Hubble UI
 - **ArgoCD** — configured to read from a local gitops repo on your filesystem
 - **GitOps repo** — scaffolded from a bootstrap template, mounted into the cluster
-- **Root ApplicationSet** — watches `apps/*/config.yaml` and deploys automatically
+- **Root ApplicationSet** — watches `apps/coordinates/*.yaml` and deploys automatically
 
 No remote git server. No cloud account. Just Docker and a single command.
 
@@ -47,9 +47,6 @@ No remote git server. No cloud account. Just Docker and a single command.
 That's it. You do **not** need to install k3d, Helm, Cilium, ArgoCD, or any other Kubernetes tooling — sikifanso embeds everything and handles the full stack internally.
 
 ## Install
-
-!!! warning "macOS notarization pending"
-    macOS binaries are currently pending Apple notarization. If you see a Gatekeeper warning, use `brew install --cask --no-quarantine sikifanso/tap/sikifanso` or build from source instead.
 
 === "Homebrew"
 

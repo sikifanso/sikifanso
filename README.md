@@ -24,7 +24,7 @@ sikifanso cluster create
 - **Cilium** — full kube-proxy replacement, ingress controller, Hubble UI
 - **ArgoCD** — configured to read from a local gitops repo on your filesystem
 - **GitOps repo** — scaffolded from a bootstrap template, mounted into the cluster
-- **Root ApplicationSet** — watches `apps/*/config.yaml` in your gitops repo and deploys them automatically
+- **Root ApplicationSet** — watches `apps/coordinates/*.yaml` in your gitops repo and deploys them automatically
 
 ## Prerequisites
 
@@ -33,8 +33,6 @@ sikifanso cluster create
 That's it. You do **not** need to install k3d, Helm, Cilium, ArgoCD, or any other Kubernetes tooling. sikifanso embeds everything and handles the full stack internally.
 
 ## Install
-
-> **Note:** macOS binaries are currently pending Apple notarization. If you see a Gatekeeper warning, you can install with `brew install --cask --no-quarantine sikifanso/tap/sikifanso` or build from source instead.
 
 ```bash
 brew install --cask sikifanso/tap/sikifanso
@@ -84,38 +82,35 @@ After creation you'll see:
 
 ## Deploying apps
 
-Drop a Helm chart definition into your gitops repo and commit:
+Use the `app add` command to deploy a Helm chart:
 
 ```bash
-mkdir -p ~/.sikifanso/clusters/default/gitops/apps/podinfo
-
-cat > ~/.sikifanso/clusters/default/gitops/apps/podinfo/config.yaml <<EOF
-name: podinfo
-repoURL: https://stefanprodan.github.io/podinfo
-chart: podinfo
-targetRevision: 6.10.1
-namespace: podinfo
-EOF
-
-cd ~/.sikifanso/clusters/default/gitops
-git add . && git commit -m "add podinfo"
+sikifanso app add podinfo \
+  --repo https://stefanprodan.github.io/podinfo \
+  --chart podinfo \
+  --version 6.10.1 \
+  --namespace podinfo
 ```
 
-Then force immediate sync (otherwise ArgoCD picks it up within ~3 minutes):
+This writes the chart coordinates and a stub values file to your gitops repo, auto-commits, and triggers an ArgoCD sync. If you omit any flags, the CLI prompts interactively.
 
 ```bash
-sikifanso argocd sync
+# List installed apps
+sikifanso app list
 ```
 
 ```
-kubectl get applications -n argocd
-# NAME      SYNC STATUS   HEALTH STATUS
-# argocd    Synced        Healthy
-# cilium    Synced        Healthy
-# podinfo   Synced        Healthy
+NAME                 CHART           VERSION    NAMESPACE
+podinfo              podinfo         6.10.1     podinfo
 ```
 
-Remove an app the same way — delete the directory, commit, sync.
+Remove an app with `app remove`:
+
+```bash
+sikifanso app remove podinfo
+```
+
+You can also create the files manually under `apps/coordinates/` and `apps/values/` if you prefer — see [Architecture](docs/architecture.md) for the file format.
 
 ## CLI reference
 
@@ -142,6 +137,10 @@ The `--cluster` flag can also be set via `SIKIFANSO_CLUSTER` env var.
 | `cluster info [NAME]` | Show cluster details (omit name to list all) |
 | `cluster start [NAME]` | Start a stopped cluster |
 | `cluster stop [NAME]` | Stop a running cluster |
+| `app add [NAME]` | Add a Helm chart to the gitops repo |
+| `app list` | List installed apps |
+| `app remove NAME` | Remove an app from the gitops repo |
+| `status [NAME]` | Show cluster state, nodes, and pods |
 | `argocd sync` | Force immediate ArgoCD reconciliation |
 
 ## Multi-cluster
@@ -171,13 +170,15 @@ Ports are auto-resolved — if defaults (30080, 30081, etc.) are taken by the fi
     ├── bootstrap/
     │   └── root-app.yaml     # Root ApplicationSet manifest
     └── apps/
-        └── <app>/
-            └── config.yaml   # Helm chart definition
+        ├── coordinates/
+        │   └── <app>.yaml    # Helm chart coordinates (repo, chart, version, namespace)
+        └── values/
+            └── <app>.yaml    # Helm values overrides
 ```
 
 The gitops directory is mounted into the k3d cluster at `/local-gitops` via a hostPath volume. ArgoCD's repo-server reads from it directly — no remote git server needed.
 
-The root ApplicationSet watches `apps/*/config.yaml` with a git file generator. Each config.yaml defines a Helm chart source, and the ApplicationSet creates an ArgoCD Application for it automatically.
+The root ApplicationSet watches `apps/coordinates/*.yaml` with a git file generator. Each coordinate file defines a Helm chart source, and the ApplicationSet creates a multi-source ArgoCD Application that pairs it with the matching values file.
 
 ### How `argocd sync` works
 

@@ -25,7 +25,7 @@ A `--cni` flag on `cluster create` could let users choose.
 
 ## App marketplace
 
-A curated catalog of pre-built `config.yaml` definitions for popular Helm charts:
+The `sikifanso app add` command is available for deploying any Helm chart. The next step is a **curated catalog** of popular charts so users can deploy without looking up repo URLs and chart names:
 
 - Prometheus + Grafana monitoring stack
 - Cert-manager
@@ -33,7 +33,7 @@ A curated catalog of pre-built `config.yaml` definitions for popular Helm charts
 - Sealed Secrets
 - Loki for log aggregation
 
-Users could deploy from the catalog with a single command like `sikifanso app add prometheus`.
+With a catalog, `sikifanso app add prometheus` would fill in the coordinates automatically.
 
 ## Cluster templates
 

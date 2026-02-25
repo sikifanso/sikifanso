@@ -13,8 +13,10 @@ Each cluster's state lives under `~/.sikifanso/clusters/<name>/`:
     ├── bootstrap/
     │   └── root-app.yaml     # Root ApplicationSet manifest
     └── apps/
-        └── <app>/
-            └── config.yaml   # Helm chart definition
+        ├── coordinates/
+        │   └── <app>.yaml    # Helm chart coordinates (repo, chart, version, namespace)
+        └── values/
+            └── <app>.yaml    # Helm values overrides
 ```
 
 ## How the local gitops repo works
@@ -25,9 +27,9 @@ This directory is mounted into the k3d cluster at `/local-gitops` via a **hostPa
 
 ## Root ApplicationSet
 
-The bootstrap template includes a root `ApplicationSet` that uses the **git file generator**. It watches `apps/*/config.yaml` in the gitops repo.
+The bootstrap template includes a root `ApplicationSet` that uses the **git file generator**. It watches `apps/coordinates/*.yaml` in the gitops repo.
 
-Each `config.yaml` defines a Helm chart source:
+Each coordinate file defines a Helm chart source:
 
 ```yaml
 name: podinfo
@@ -37,14 +39,14 @@ targetRevision: 6.10.1
 namespace: podinfo
 ```
 
-The ApplicationSet automatically creates an ArgoCD `Application` for every matching config file. Adding or removing an app directory is all it takes to deploy or undeploy.
+The ApplicationSet automatically creates a multi-source ArgoCD `Application` for every matching coordinate file, pairing it with the corresponding values file at `apps/values/<name>.yaml`. Adding or removing a coordinate file is all it takes to deploy or undeploy.
 
 ## How `argocd sync` works
 
 ArgoCD's default reconciliation interval is **180 seconds**. The `sikifanso argocd sync` command bypasses this by sending a webhook push event (mimicking a GitHub push notification) to two endpoints:
 
 1. **ArgoCD server** — invalidates the repo-server's git revision cache, causing it to re-read the local gitops repo
-2. **ApplicationSet controller** — triggers immediate re-evaluation of the git generator, picking up new or removed app directories
+2. **ApplicationSet controller** — triggers immediate re-evaluation of the git generator, picking up new or removed coordinate files
 
 The ApplicationSet controller webhook is reached via the **Kubernetes API server proxy**, so no extra ports are exposed.
 
