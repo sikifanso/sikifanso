@@ -14,3 +14,8 @@ vendor/
 # Docs
 site/
 .venv/
+
+# Ignore agent settings
+.claude/
+PLAN.md
+ROADMAP.md
