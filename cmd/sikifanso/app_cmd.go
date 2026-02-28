@@ -164,13 +164,13 @@ func appListAction(_ context.Context, cmd *cli.Command) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stderr, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tCHART\tVERSION\tNAMESPACE\tSOURCE")
+	_, _ = fmt.Fprintln(w, "NAME\tCHART\tVERSION\tNAMESPACE\tSOURCE")
 	for _, a := range apps {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", a.Name, a.Chart, a.Version, a.Namespace, "custom")
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", a.Name, a.Chart, a.Version, a.Namespace, "custom")
 	}
 	for _, e := range catalogEntries {
 		if e.Enabled {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", e.Name, e.Chart, e.TargetRevision, e.Namespace, "catalog")
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", e.Name, e.Chart, e.TargetRevision, e.Namespace, "catalog")
 		}
 	}
 	if err := w.Flush(); err != nil {
