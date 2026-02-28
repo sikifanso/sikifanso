@@ -30,7 +30,8 @@ const (
 
 // Options configures cluster creation.
 type Options struct {
-	BootstrapURL string
+	BootstrapURL     string
+	BootstrapVersion string // tag to clone; "" means HEAD
 }
 
 // Create creates a new single-server k3d cluster using the SimpleConfig pipeline.
@@ -66,7 +67,10 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 	if err != nil {
 		return nil, fmt.Errorf("resolving gitops directory: %w", err)
 	}
-	if err := gitops.Scaffold(ctx, log, opts.BootstrapURL, gitopsDir); err != nil {
+	if err := gitops.Scaffold(ctx, log, gitopsDir, gitops.ScaffoldOptions{
+		RepoURL: opts.BootstrapURL,
+		Version: opts.BootstrapVersion,
+	}); err != nil {
 		return nil, fmt.Errorf("scaffolding gitops repo: %w", err)
 	}
 
@@ -182,11 +186,12 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 
 	// Build and save session.
 	sess := &session.Session{
-		ClusterName:  name,
-		State:        "running",
-		CreatedAt:    time.Now(),
-		BootstrapURL: opts.BootstrapURL,
-		GitOpsPath:   gitopsDir,
+		ClusterName:      name,
+		State:            "running",
+		CreatedAt:        time.Now(),
+		BootstrapURL:     opts.BootstrapURL,
+		BootstrapVersion: opts.BootstrapVersion,
+		GitOpsPath:       gitopsDir,
 		Services: session.ServiceInfo{
 			ArgoCD: session.ArgoCDInfo{
 				URL:          fmt.Sprintf("http://localhost:%d", hp.ArgoCDUI),

@@ -23,8 +23,14 @@ func stateString(state string) string {
 
 // printClusterInfo prints a formatted info box with all cluster service details.
 func printClusterInfo(sess *session.Session) {
+	bootstrapDisplay := "HEAD (unpinned)"
+	if sess.BootstrapVersion != "" {
+		bootstrapDisplay = sess.BootstrapVersion
+	}
+
 	lines := []string{
 		fmt.Sprintf("State:           %s", stateString(sess.State)),
+		fmt.Sprintf("Bootstrap:       %s", bootstrapDisplay),
 		"",
 		fmt.Sprintf("ArgoCD URL:      %s", sess.Services.ArgoCD.URL),
 		fmt.Sprintf("ArgoCD User:     %s", sess.Services.ArgoCD.Username),

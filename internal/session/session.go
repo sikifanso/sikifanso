@@ -11,13 +11,14 @@ import (
 
 // Session holds persisted metadata for a sikifanso cluster.
 type Session struct {
-	ClusterName  string        `json:"clusterName"`
-	State        string        `json:"state"`
-	CreatedAt    time.Time     `json:"createdAt"`
-	BootstrapURL string        `json:"bootstrapURL"`
-	GitOpsPath   string        `json:"gitOpsPath"`
-	Services     ServiceInfo   `json:"services"`
-	K3dConfig    K3dConfigInfo `json:"k3dConfig"`
+	ClusterName      string        `json:"clusterName"`
+	State            string        `json:"state"`
+	CreatedAt        time.Time     `json:"createdAt"`
+	BootstrapURL     string        `json:"bootstrapURL"`
+	BootstrapVersion string        `json:"bootstrapVersion,omitempty"`
+	GitOpsPath       string        `json:"gitOpsPath"`
+	Services         ServiceInfo   `json:"services"`
+	K3dConfig        K3dConfigInfo `json:"k3dConfig"`
 }
 
 // ServiceInfo groups all service access details.

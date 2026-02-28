@@ -2,10 +2,8 @@ package gitops
 
 import (
 	"fmt"
-	"time"
 
 	git "github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 // Commit stages the given paths and creates a commit in the gitops repo.
@@ -27,11 +25,7 @@ func Commit(repoDir, message string, paths ...string) error {
 	}
 
 	_, err = w.Commit(message, &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "sikifanso",
-			Email: "sikifanso@local",
-			When:  time.Now(),
-		},
+		Author: botSignature(),
 	})
 	if err != nil {
 		return fmt.Errorf("creating commit: %w", err)

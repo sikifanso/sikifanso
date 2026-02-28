@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 
 	"github.com/alicanalbayrak/sikifanso/internal/cluster"
 	"github.com/alicanalbayrak/sikifanso/internal/gitops"
@@ -26,6 +27,10 @@ func clusterCreateCmd() *cli.Command {
 				Usage: "Bootstrap template repo URL",
 				Value: gitops.DefaultBootstrapURL,
 			},
+			&cli.StringFlag{
+				Name:  "bootstrap-version",
+				Usage: "Bootstrap repo tag to clone (default: match CLI version; empty string forces HEAD)",
+			},
 		},
 		Action: clusterCreateAction,
 	}
@@ -42,6 +47,14 @@ func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
 		bootstrap = prompt.String("Bootstrap repo", gitops.DefaultBootstrapURL)
 	}
 
+	isDefaultBootstrap := bootstrap == gitops.DefaultBootstrapURL
+	bootstrapVersion := resolveBootstrapVersion(
+		version,
+		isDefaultBootstrap,
+		cmd.String("bootstrap-version"),
+		cmd.IsSet("bootstrap-version"),
+	)
+
 	zapLogger.Info("running preflight checks")
 	if err := preflight.CheckDocker(ctx); err != nil {
 		zapLogger.Error("preflight check failed", zap.Error(err))
@@ -50,7 +63,8 @@ func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
 	zapLogger.Info("all preflight checks passed")
 
 	sess, err := cluster.Create(ctx, zapLogger, name, cluster.Options{
-		BootstrapURL: bootstrap,
+		BootstrapURL:     bootstrap,
+		BootstrapVersion: bootstrapVersion,
 	})
 	if err != nil {
 		zapLogger.Error("cluster creation failed", zap.Error(err))
@@ -59,4 +73,25 @@ func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
 
 	printClusterInfo(sess)
 	return nil
+}
+
+// resolveBootstrapVersion returns the bootstrap tag to pin, or "" for HEAD.
+//
+// Resolution order:
+//  1. --bootstrap-version explicitly set → use that value (empty string forces HEAD)
+//  2. Custom --bootstrap URL → "" (HEAD; custom repos may not share our tags)
+//  3. Dev build ("dev") or pre-release/snapshot (contains "-", e.g. "0.4.1-next",
+//     "v0.5.0-rc1" from goreleaser snapshot template) → "" (HEAD)
+//  4. Release build → CLI version (e.g. "v0.5.0"), which must match a bootstrap repo tag
+func resolveBootstrapVersion(cliVersion string, isDefaultBootstrap bool, explicitVersion string, versionSet bool) string {
+	if versionSet {
+		return explicitVersion
+	}
+	if !isDefaultBootstrap {
+		return ""
+	}
+	if cliVersion == "dev" || strings.Contains(cliVersion, "-") {
+		return ""
+	}
+	return cliVersion
 }
