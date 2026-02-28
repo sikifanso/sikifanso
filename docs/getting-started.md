@@ -36,9 +36,25 @@ Open the **ArgoCD URL** in your browser and log in with the displayed credential
 
 Open the **Hubble URL** to see real-time network traffic in your cluster.
 
-## Deploy an app
+## Deploy an app from the catalog
 
-Let's deploy [podinfo](https://github.com/stefanprodan/podinfo) as an example.
+The bootstrap repo ships with a curated catalog of apps. Enable one with:
+
+```bash
+sikifanso catalog enable prometheus-stack
+```
+
+This sets `enabled: true` in the catalog entry, commits the change, and triggers an ArgoCD sync.
+
+Browse all available catalog apps with:
+
+```bash
+sikifanso catalog list
+```
+
+## Deploy a custom Helm chart
+
+You can also deploy any Helm chart directly. Let's deploy [podinfo](https://github.com/stefanprodan/podinfo) as an example.
 
 ```bash
 sikifanso app add podinfo \
@@ -50,26 +66,39 @@ sikifanso app add podinfo \
 
 This writes the chart coordinates and a stub values file to your gitops repo, auto-commits, and triggers an ArgoCD sync. If you omit any flags, the CLI prompts interactively.
 
-Verify with:
+## List installed apps
 
 ```bash
 sikifanso app list
 ```
 
 ```
-NAME                 CHART           VERSION    NAMESPACE
-podinfo              podinfo         6.10.1     podinfo
+NAME                 CHART                  VERSION    NAMESPACE    SOURCE
+podinfo              podinfo                6.10.1     podinfo      custom
+prometheus-stack     kube-prometheus-stack   82.4.3   monitoring   catalog
 ```
 
-You can also create the files manually under `apps/coordinates/` and `apps/values/` in your gitops repo — see [Architecture](architecture.md) for the file format.
+Both custom apps and enabled catalog apps are shown, with a `SOURCE` column to distinguish them.
+
+You can also create the files manually under `apps/coordinates/` and `apps/values/` in your gitops repo -- see [Architecture](architecture.md) for the file format.
 
 ## Remove an app
+
+For custom apps:
 
 ```bash
 sikifanso app remove podinfo
 ```
 
 This deletes the coordinate and values files, auto-commits, and triggers an ArgoCD sync.
+
+For catalog apps:
+
+```bash
+sikifanso catalog disable prometheus-stack
+```
+
+This sets `enabled: false`, commits, and triggers an ArgoCD sync.
 
 ## Manage your cluster
 

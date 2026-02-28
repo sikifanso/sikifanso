@@ -19,19 +19,27 @@ A bootstrap repo must follow this structure:
 ```
 your-bootstrap-repo/
 ├── bootstrap/
-│   └── root-app.yaml         # Root ApplicationSet manifest
-└── apps/
-    ├── coordinates/
-    │   └── <app>.yaml         # Helm chart coordinates (optional, pre-installed apps)
+│   ├── root-app.yaml         # ApplicationSet for custom apps
+│   └── root-catalog.yaml     # ApplicationSet for catalog apps
+├── apps/
+│   ├── coordinates/
+│   │   └── <app>.yaml        # Helm chart coordinates (optional, pre-installed apps)
+│   └── values/
+│       └── <app>.yaml        # Helm values overrides (optional)
+└── catalog/                  # Curated catalog apps (optional)
+    ├── <app>.yaml            # App definition with enabled flag
     └── values/
-        └── <app>.yaml         # Helm values overrides (optional)
+        └── <app>.yaml        # Helm values overrides
 ```
 
-### root-app.yaml
+### Bootstrap manifests
 
-This is the root `ApplicationSet` that tells ArgoCD how to discover and deploy apps. It uses the git file generator to watch `apps/coordinates/*.yaml`.
+The `bootstrap/` directory contains two `ApplicationSet` manifests:
 
-The default bootstrap template's root-app.yaml works with any set of apps — you typically don't need to modify it unless you want to change the generator pattern or add additional ApplicationSet features.
+- **root-app.yaml** uses the git file generator to watch `apps/coordinates/*.yaml` for custom Helm charts.
+- **root-catalog.yaml** uses the git file generator to watch `catalog/*.yaml` and deploys only entries where `enabled: true`.
+
+The default bootstrap template's manifests work with any set of apps -- you typically don't need to modify them unless you want to change the generator pattern or add additional ApplicationSet features.
 
 ### Pre-installed apps
 

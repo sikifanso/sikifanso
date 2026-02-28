@@ -65,7 +65,10 @@ Each cluster has its own gitops repo at:
 Deploy different apps to different clusters using the `--cluster` flag:
 
 ```bash
-# Deploy podinfo to lab1
+# Enable a catalog app on lab1
+sikifanso catalog enable prometheus-stack --cluster lab1
+
+# Deploy a custom Helm chart to lab1
 sikifanso app add podinfo \
   --repo https://stefanprodan.github.io/podinfo \
   --chart podinfo \

@@ -28,7 +28,7 @@ sikifanso cluster create
 - **Cilium** — full kube-proxy replacement, ingress controller, Hubble UI
 - **ArgoCD** — configured to read from a local gitops repo on your filesystem
 - **GitOps repo** — scaffolded from a bootstrap template, mounted into the cluster
-- **Root ApplicationSet** — watches `apps/coordinates/*.yaml` in your gitops repo and deploys them automatically
+- **Root ApplicationSets** — one watches `apps/coordinates/*.yaml` for custom apps, another watches `catalog/*.yaml` for curated catalog apps
 
 ## Prerequisites
 
@@ -86,7 +86,27 @@ After creation you'll see:
 
 ## Deploying apps
 
-Use the `app add` command to deploy a Helm chart:
+### From the catalog
+
+The bootstrap repo ships with a curated catalog of 20+ apps. Enable one with a single command:
+
+```bash
+sikifanso catalog enable prometheus-stack
+```
+
+This sets `enabled: true` in the catalog entry, commits the change, and triggers an ArgoCD sync.
+
+```bash
+# Browse all catalog apps
+sikifanso catalog list
+
+# Disable a catalog app
+sikifanso catalog disable prometheus-stack
+```
+
+### Custom Helm charts
+
+You can also deploy any Helm chart using the `app add` command:
 
 ```bash
 sikifanso app add podinfo \
@@ -98,17 +118,20 @@ sikifanso app add podinfo \
 
 This writes the chart coordinates and a stub values file to your gitops repo, auto-commits, and triggers an ArgoCD sync. If you omit any flags, the CLI prompts interactively.
 
+### Listing and removing apps
+
 ```bash
-# List installed apps
+# List all installed apps (both custom and catalog)
 sikifanso app list
 ```
 
 ```
-NAME                 CHART           VERSION    NAMESPACE
-podinfo              podinfo         6.10.1     podinfo
+NAME                 CHART                  VERSION    NAMESPACE    SOURCE
+podinfo              podinfo                6.10.1     podinfo      custom
+prometheus-stack     kube-prometheus-stack   82.4.3   monitoring   catalog
 ```
 
-Remove an app with `app remove`:
+Remove a custom app with `app remove`:
 
 ```bash
 sikifanso app remove podinfo
@@ -141,9 +164,12 @@ The `--cluster` flag can also be set via `SIKIFANSO_CLUSTER` env var.
 | `cluster info [NAME]` | Show cluster details (omit name to list all) |
 | `cluster start [NAME]` | Start a stopped cluster |
 | `cluster stop [NAME]` | Stop a running cluster |
-| `app add [NAME]` | Add a Helm chart to the gitops repo |
-| `app list` | List installed apps |
-| `app remove NAME` | Remove an app from the gitops repo |
+| `app add [NAME]` | Add a custom Helm chart to the gitops repo |
+| `app list` | List installed apps (custom and catalog) |
+| `app remove NAME` | Remove a custom app from the gitops repo |
+| `catalog list` | List all catalog apps with enabled/disabled status |
+| `catalog enable NAME` | Enable a catalog app |
+| `catalog disable NAME` | Disable a catalog app |
 | `status [NAME]` | Show cluster state, nodes, and pods |
 | `argocd sync` | Force immediate ArgoCD reconciliation |
 
@@ -172,17 +198,25 @@ Ports are auto-resolved — if defaults (30080, 30081, etc.) are taken by the fi
 ├── session.yaml              # Cluster metadata, credentials, ports
 └── gitops/                   # Local git repo (mounted into cluster)
     ├── bootstrap/
-    │   └── root-app.yaml     # Root ApplicationSet manifest
-    └── apps/
-        ├── coordinates/
-        │   └── <app>.yaml    # Helm chart coordinates (repo, chart, version, namespace)
+    │   ├── root-app.yaml     # ApplicationSet for custom apps
+    │   └── root-catalog.yaml # ApplicationSet for catalog apps
+    ├── apps/                 # Custom user-supplied Helm apps
+    │   ├── coordinates/
+    │   │   └── <app>.yaml    # Helm chart coordinates (repo, chart, version, namespace)
+    │   └── values/
+    │       └── <app>.yaml    # Helm values overrides
+    └── catalog/              # Pre-curated catalog apps
+        ├── <app>.yaml        # App definition with enabled flag
         └── values/
             └── <app>.yaml    # Helm values overrides
 ```
 
 The gitops directory is mounted into the k3d cluster at `/local-gitops` via a hostPath volume. ArgoCD's repo-server reads from it directly — no remote git server needed.
 
-The root ApplicationSet watches `apps/coordinates/*.yaml` with a git file generator. Each coordinate file defines a Helm chart source, and the ApplicationSet creates a multi-source ArgoCD Application that pairs it with the matching values file.
+Two root ApplicationSets manage the dual-track app model:
+
+- **root-app.yaml** watches `apps/coordinates/*.yaml` for custom Helm charts added via `app add`
+- **root-catalog.yaml** watches `catalog/*.yaml` and deploys only entries where `enabled: true`
 
 ### How `argocd sync` works
 
@@ -202,4 +236,4 @@ Cluster metadata is persisted to `~/.sikifanso/clusters/<name>/session.yaml` and
 - Hubble UI URL
 - GitOps repo path
 - k3d configuration (image, node counts)
-- Bootstrap template URL
+- Bootstrap template URL and version

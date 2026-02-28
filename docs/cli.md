@@ -32,8 +32,9 @@ sikifanso cluster create --name mylab --bootstrap https://github.com/sikifanso/s
 |------|---------|-------------|
 | `--name` | `default` | Cluster name |
 | `--bootstrap` | sikifanso default | Bootstrap template repo URL |
+| `--bootstrap-version` | *(match CLI version)* | Bootstrap repo tag to clone (empty string forces HEAD) |
 
-If flags are omitted, the CLI prompts interactively.
+If flags are omitted, the CLI prompts interactively. For release builds using the default bootstrap repo, the CLI automatically pins to the matching bootstrap tag. Dev builds and custom bootstrap repos default to HEAD.
 
 ### `cluster delete [NAME]`
 
@@ -89,7 +90,7 @@ sikifanso cluster stop mylab
 
 ### `app add [NAME]`
 
-Add a Helm chart to the gitops repo. Writes a coordinate file and a stub values file, auto-commits, and triggers an ArgoCD sync.
+Add a custom Helm chart to the gitops repo. Writes a coordinate file and a stub values file, auto-commits, and triggers an ArgoCD sync. For curated apps, use `catalog enable` instead.
 
 ```bash
 sikifanso app add podinfo --repo https://stefanprodan.github.io/podinfo --chart podinfo --version 6.10.1 --namespace podinfo
@@ -112,22 +113,23 @@ Creates two files in the gitops repo:
 
 ### `app list`
 
-List all installed apps in the current cluster's gitops repo.
+List all installed apps in the current cluster's gitops repo. Shows both custom apps (from `apps/coordinates/`) and enabled catalog apps, with a `SOURCE` column to distinguish them.
 
 ```bash
 sikifanso app list
 ```
 
 ```
-NAME                 CHART           VERSION    NAMESPACE
-podinfo              podinfo         6.10.1     podinfo
+NAME                 CHART                  VERSION    NAMESPACE    SOURCE
+podinfo              podinfo                6.10.1     podinfo      custom
+prometheus-stack     kube-prometheus-stack   82.4.3   monitoring   catalog
 ```
 
 No flags beyond the global `--cluster`.
 
 ### `app remove NAME`
 
-Remove an app from the gitops repo. Deletes the coordinate and values files, auto-commits, and triggers an ArgoCD sync.
+Remove a custom app from the gitops repo. Deletes the coordinate and values files, auto-commits, and triggers an ArgoCD sync. To disable a catalog app, use `catalog disable` instead.
 
 ```bash
 sikifanso app remove podinfo
@@ -137,7 +139,56 @@ sikifanso app remove podinfo
 |----------|-------------|
 | `NAME` | App name to remove (required) |
 
-Shell completion is supported — press Tab to see available app names.
+Shell completion is supported -- press Tab to see available app names.
+
+### `catalog list`
+
+List all catalog apps with their enabled/disabled status.
+
+```bash
+sikifanso catalog list
+```
+
+```
+NAME                CATEGORY     ENABLED  DESCRIPTION
+alertmanager        monitoring   false    Alertmanager for Prometheus alerts
+grafana             monitoring   false    Grafana observability dashboards
+prometheus-stack    monitoring   true     Prometheus metrics collection and Grafana dashboards
+```
+
+Columns are: `NAME`, `CATEGORY`, `ENABLED`, `DESCRIPTION`. The `ENABLED` column is color-coded green/red.
+
+### `catalog enable NAME`
+
+Enable a catalog app. Sets `enabled: true` in the catalog entry, commits, and triggers an ArgoCD sync.
+
+```bash
+sikifanso catalog enable prometheus-stack
+```
+
+| Argument | Description |
+|----------|-------------|
+| `NAME` | Catalog app name to enable (required) |
+
+If the app is already enabled, prints a message and does nothing. If the app name is not found, returns an error listing all available catalog apps.
+
+Shell completion is supported -- press Tab to see available catalog app names.
+
+### `catalog disable NAME`
+
+Disable a catalog app. Sets `enabled: false` in the catalog entry, commits, and triggers an ArgoCD sync.
+
+```bash
+sikifanso catalog disable prometheus-stack
+```
+
+| Argument | Description |
+|----------|-------------|
+| `NAME` | Catalog app name to disable (required) |
+
+If the app is already disabled, prints a message and does nothing.
+
+Shell completion is supported -- press Tab to see currently enabled catalog app names.
 
 ### `status [NAME]`
 

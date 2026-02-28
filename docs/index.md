@@ -40,7 +40,8 @@ sikifanso cluster create
 - **Cilium** — full kube-proxy replacement, ingress controller, Hubble UI
 - **ArgoCD** — configured to read from a local gitops repo on your filesystem
 - **GitOps repo** — scaffolded from a bootstrap template, mounted into the cluster
-- **Root ApplicationSet** — watches `apps/coordinates/*.yaml` and deploys automatically
+- **App catalog** — 20+ curated apps ready to enable with `sikifanso catalog enable <name>`
+- **Root ApplicationSets** — one for custom apps, one for the curated catalog
 
 No remote git server. No cloud account. Just Docker and a single command.
 

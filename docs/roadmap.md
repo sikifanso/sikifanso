@@ -23,17 +23,9 @@ Cilium is a great default, but some users may prefer alternatives:
 
 A `--cni` flag on `cluster create` could let users choose.
 
-## App marketplace
+## App catalog -- shipped
 
-The `sikifanso app add` command is available for deploying any Helm chart. The next step is a **curated catalog** of popular charts so users can deploy without looking up repo URLs and chart names:
-
-- Prometheus + Grafana monitoring stack
-- Cert-manager
-- Ingress-nginx
-- Sealed Secrets
-- Loki for log aggregation
-
-With a catalog, `sikifanso app add prometheus` would fill in the coordinates automatically.
+The curated app catalog is now available via `sikifanso catalog list/enable/disable`. The bootstrap repo includes 20+ pre-defined apps across monitoring, media, homelab, and dev categories. Enable any catalog app with `sikifanso catalog enable <name>` -- no need to look up repo URLs or chart names. Custom Helm charts can still be deployed via `sikifanso app add`.
 
 ## Cluster templates
 
