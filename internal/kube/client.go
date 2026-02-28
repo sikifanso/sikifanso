@@ -5,12 +5,13 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// ClientForCluster returns a Kubernetes clientset configured for the
-// k3d-<clusterName> kubeconfig context.
-func ClientForCluster(clusterName string) (*kubernetes.Clientset, error) {
+// RESTConfigForCluster returns a REST config for the k3d-<clusterName>
+// kubeconfig context.
+func RESTConfigForCluster(clusterName string) (*rest.Config, error) {
 	kubeContext := "k3d-" + clusterName
 
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
@@ -19,6 +20,17 @@ func ClientForCluster(clusterName string) (*kubernetes.Clientset, error) {
 	).ClientConfig()
 	if err != nil {
 		return nil, fmt.Errorf("building kubeconfig for context %s: %w", kubeContext, err)
+	}
+
+	return config, nil
+}
+
+// ClientForCluster returns a Kubernetes clientset configured for the
+// k3d-<clusterName> kubeconfig context.
+func ClientForCluster(clusterName string) (*kubernetes.Clientset, error) {
+	config, err := RESTConfigForCluster(clusterName)
+	if err != nil {
+		return nil, err
 	}
 
 	cs, err := kubernetes.NewForConfig(config)

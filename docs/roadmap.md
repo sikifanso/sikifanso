@@ -23,6 +23,10 @@ Cilium is a great default, but some users may prefer alternatives:
 
 A `--cni` flag on `cluster create` could let users choose.
 
+## Health diagnostics -- shipped
+
+`sikifanso doctor` runs a series of health checks against the cluster: Docker daemon, k3d nodes, Cilium, Hubble, ArgoCD, and every enabled catalog app. Each failure includes the root cause and a suggested fix command. See the [CLI reference](cli.md#doctor) for details.
+
 ## App catalog -- shipped
 
 The curated app catalog is now available via `sikifanso catalog list/enable/disable`. The bootstrap repo includes 20+ pre-defined apps across monitoring, media, homelab, and dev categories. Enable any catalog app with `sikifanso catalog enable <name>` -- no need to look up repo URLs or chart names. Custom Helm charts can still be deployed via `sikifanso app add`.

@@ -170,8 +170,32 @@ The `--cluster` flag can also be set via `SIKIFANSO_CLUSTER` env var.
 | `catalog list` | List all catalog apps with enabled/disabled status |
 | `catalog enable NAME` | Enable a catalog app |
 | `catalog disable NAME` | Disable a catalog app |
+| `doctor` | Run health checks on the cluster and its components |
 | `status [NAME]` | Show cluster state, nodes, and pods |
 | `argocd sync` | Force immediate ArgoCD reconciliation |
+
+## Health checks
+
+```bash
+sikifanso doctor
+```
+
+Runs a series of health checks against the cluster and prints a structured report. Checks Docker, k3d nodes, Cilium, Hubble, ArgoCD, and every enabled catalog app. Exits 0 when everything is healthy, 1 when any check fails.
+
+```
+ok  Docker daemon       running (v27.0.3)
+ok  k3d cluster         3/3 nodes ready
+ok  Cilium              DaemonSet 3/3 ready
+ok  Hubble              relay deployment ready
+ok  ArgoCD              3/3 deployments ready
+!!  App: grafana         Degraded -- Synced
+                         -> Deployment grafana in namespace monitoring: replicas unavailable
+                         -> Try: sikifanso catalog disable grafana
+```
+
+Each failure includes the root cause and a suggested fix command.
+
+If no cluster session exists, `doctor` still runs the Docker check and reports the missing cluster.
 
 ## Multi-cluster
 

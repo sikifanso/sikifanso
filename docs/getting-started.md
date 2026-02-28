@@ -100,11 +100,24 @@ sikifanso catalog disable prometheus-stack
 
 This sets `enabled: false`, commits, and triggers an ArgoCD sync.
 
+## Check cluster health
+
+Run `doctor` to verify that all cluster components are healthy:
+
+```bash
+sikifanso doctor
+```
+
+This checks Docker, k3d nodes, Cilium, Hubble, ArgoCD, and every enabled catalog app. If anything is wrong, it tells you exactly what failed and how to fix it.
+
 ## Manage your cluster
 
 ```bash
 # Show cluster details
 sikifanso cluster info
+
+# Check cluster health
+sikifanso doctor
 
 # Stop the cluster (preserves state)
 sikifanso cluster stop

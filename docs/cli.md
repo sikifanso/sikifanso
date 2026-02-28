@@ -190,6 +190,43 @@ If the app is already disabled, prints a message and does nothing.
 
 Shell completion is supported -- press Tab to see currently enabled catalog app names.
 
+### `doctor`
+
+Run health checks on the cluster and its components. Exits 0 when all checks pass, 1 when any check fails.
+
+```bash
+sikifanso doctor
+sikifanso doctor --cluster mylab
+```
+
+Checks run in order:
+
+| Check | What it verifies |
+|-------|-----------------|
+| Docker daemon | Docker is reachable; reports version |
+| k3d cluster | All k3d nodes are in Ready state |
+| Cilium | `cilium` DaemonSet in `kube-system` is fully available |
+| Hubble | `hubble-relay` Deployment in `kube-system` is Available |
+| ArgoCD | Core deployments (`argocd-server`, `argocd-repo-server`, `argocd-applicationset-controller`) are Available |
+| Apps | Each enabled catalog app's ArgoCD Application is Healthy and Synced |
+
+Each failure includes a cause and a suggested fix command:
+
+```
+ok  Docker daemon       running (v27.0.3)
+ok  k3d cluster         3/3 nodes ready
+ok  Cilium              DaemonSet 3/3 ready
+ok  Hubble              relay deployment ready
+ok  ArgoCD              3/3 deployments ready
+!!  App: grafana         Degraded -- Synced
+                         -> Deployment grafana in namespace monitoring: replicas unavailable
+                         -> Try: sikifanso catalog disable grafana
+```
+
+If no cluster session exists (no cluster has been created), `doctor` runs the Docker check only and reports the missing cluster with a suggested `sikifanso cluster create` fix.
+
+No flags beyond the global `--cluster`.
+
 ### `status [NAME]`
 
 Show cluster state, nodes, and pod summary. Omit the name to show all clusters.
