@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
+	"text/tabwriter"
 
 	"github.com/alicanalbayrak/sikifanso/internal/app"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd"
+	"github.com/alicanalbayrak/sikifanso/internal/catalog"
 	"github.com/alicanalbayrak/sikifanso/internal/prompt"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
 	"github.com/fatih/color"
@@ -145,14 +148,33 @@ func appListAction(_ context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return fmt.Errorf("listing apps: %w", err)
 	}
-	if len(apps) == 0 {
+
+	catalogEntries, err := catalog.List(sess.GitOpsPath)
+	if err != nil {
+		return fmt.Errorf("listing catalog: %w", err)
+	}
+
+	hasEnabledCatalog := slices.ContainsFunc(catalogEntries, func(e catalog.Entry) bool {
+		return e.Enabled
+	})
+
+	if len(apps) == 0 && !hasEnabledCatalog {
 		fmt.Fprintln(os.Stderr, "No apps installed — add one with: sikifanso app add")
 		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "%-20s %-15s %-10s %s\n", "NAME", "CHART", "VERSION", "NAMESPACE")
+	w := tabwriter.NewWriter(os.Stderr, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "NAME\tCHART\tVERSION\tNAMESPACE\tSOURCE")
 	for _, a := range apps {
-		fmt.Fprintf(os.Stderr, "%-20s %-15s %-10s %s\n", a.Name, a.Chart, a.Version, a.Namespace)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", a.Name, a.Chart, a.Version, a.Namespace, "custom")
+	}
+	for _, e := range catalogEntries {
+		if e.Enabled {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", e.Name, e.Chart, e.TargetRevision, e.Namespace, "catalog")
+		}
+	}
+	if err := w.Flush(); err != nil {
+		return fmt.Errorf("flushing output: %w", err)
 	}
 
 	return nil
