@@ -29,7 +29,7 @@ func (DockerCheck) Run(ctx context.Context) []Result {
 	if err != nil {
 		return []Result{{Name: checkNameDocker, OK: true, Message: "running"}}
 	}
-	defer cli.Close()
+	defer func() { _ = cli.Close() }()
 
 	ver, err := cli.ServerVersion(ctx)
 	if err != nil {
