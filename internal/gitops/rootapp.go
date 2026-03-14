@@ -2,36 +2,23 @@ package gitops
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"go.uber.org/zap"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 )
-
-// gvrFrom derives a GroupVersionResource from the object's apiVersion and kind.
-// NOTE: the naive "+s" pluralisation only works for the known bootstrap
-// manifests (e.g. ApplicationSet → applicationsets). If new kinds with
-// irregular plurals are added, this must be replaced with a proper REST mapper.
-func gvrFrom(obj *unstructured.Unstructured) (schema.GroupVersionResource, error) {
-	gv, err := schema.ParseGroupVersion(obj.GetAPIVersion())
-	if err != nil {
-		return schema.GroupVersionResource{}, fmt.Errorf("parsing apiVersion %q: %w", obj.GetAPIVersion(), err)
-	}
-	return schema.GroupVersionResource{
-		Group:    gv.Group,
-		Version:  gv.Version,
-		Resource: strings.ToLower(obj.GetKind()) + "s",
-	}, nil
-}
 
 // bootstrapManifests lists the manifests that ApplyRootApp applies to the cluster.
 var bootstrapManifests = []string{
@@ -40,7 +27,7 @@ var bootstrapManifests = []string{
 }
 
 // ApplyRootApp reads the bootstrap ApplicationSet manifests from the gitops
-// directory and applies them to the cluster via the dynamic client.
+// directory and applies them to the cluster via Server-Side Apply.
 func ApplyRootApp(ctx context.Context, log *zap.Logger, gitopsDir string) error {
 	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
 	if err != nil {
@@ -52,8 +39,14 @@ func ApplyRootApp(ctx context.Context, log *zap.Logger, gitopsDir string) error 
 		return fmt.Errorf("creating dynamic client: %w", err)
 	}
 
+	disc, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil {
+		return fmt.Errorf("creating discovery client: %w", err)
+	}
+	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(disc))
+
 	for _, rel := range bootstrapManifests {
-		if err := applyManifest(ctx, log, dc, filepath.Join(gitopsDir, rel)); err != nil {
+		if err := applyManifest(ctx, log, dc, mapper, filepath.Join(gitopsDir, rel)); err != nil {
 			return err
 		}
 	}
@@ -61,8 +54,8 @@ func ApplyRootApp(ctx context.Context, log *zap.Logger, gitopsDir string) error 
 	return nil
 }
 
-// applyManifest reads a single YAML manifest and creates it in the cluster.
-func applyManifest(ctx context.Context, log *zap.Logger, dc dynamic.Interface, path string) error {
+// applyManifest reads a single YAML manifest and applies it via Server-Side Apply.
+func applyManifest(ctx context.Context, log *zap.Logger, dc dynamic.Interface, mapper *restmapper.DeferredDiscoveryRESTMapper, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("reading manifest %s: %w", filepath.Base(path), err)
@@ -78,25 +71,37 @@ func applyManifest(ctx context.Context, log *zap.Logger, dc dynamic.Interface, p
 		ns = "argocd"
 	}
 
-	gvr, err := gvrFrom(&obj)
+	gvk := obj.GroupVersionKind()
+	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
-		return fmt.Errorf("deriving GVR for manifest %s: %w", filepath.Base(path), err)
+		return fmt.Errorf("mapping GVK %s for manifest %s: %w", gvk, filepath.Base(path), err)
 	}
-	log.Info("applying bootstrap manifest",
+
+	log.Info("applying bootstrap manifest (SSA)",
 		zap.String("name", obj.GetName()),
 		zap.String("namespace", ns),
-		zap.String("resource", gvr.Resource),
+		zap.String("resource", mapping.Resource.Resource),
 	)
 
-	_, err = dc.Resource(gvr).Namespace(ns).Create(ctx, &obj, metav1.CreateOptions{})
+	jsonData, err := json.Marshal(obj.Object)
 	if err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			log.Warn("manifest already exists, skipping", zap.String("name", obj.GetName()))
-			return nil
-		}
-		return fmt.Errorf("creating %s: %w", obj.GetName(), err)
+		return fmt.Errorf("marshaling %s to JSON: %w", obj.GetName(), err)
 	}
 
-	log.Info("manifest created", zap.String("name", obj.GetName()))
+	_, err = dc.Resource(mapping.Resource).Namespace(ns).Patch(
+		ctx,
+		obj.GetName(),
+		types.ApplyPatchType,
+		jsonData,
+		metav1.PatchOptions{
+			FieldManager: "sikifanso",
+			Force:        ptr.To(true),
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("applying %s: %w", obj.GetName(), err)
+	}
+
+	log.Info("manifest applied", zap.String("name", obj.GetName()))
 	return nil
 }

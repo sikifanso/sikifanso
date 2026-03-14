@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>sikifanso - {{.ClusterName}}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>sikifanso</h1>
+      <span class="cluster-name">cluster: {{.ClusterName}}</span>
+    </header>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="label">Nodes</div>
+        <div id="nodes-value" class="value{{if eq .NodesReady .NodeCount}} ok{{else}} warn{{end}}">{{.NodesReady}}/{{.NodeCount}}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Catalog Apps</div>
+        <div id="enabled-value" class="value">{{.EnabledCount}}/{{.TotalApps}}</div>
+      </div>
+    </div>
+
+    <h2>Catalog Applications</h2>
+    <table class="app-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Category</th>
+          <th>Namespace</th>
+          <th>Enabled</th>
+          <th>Health</th>
+          <th>Sync</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .CatalogApps}}
+        <tr id="app-{{.Name}}">
+          <td>{{.Name}}</td>
+          <td>{{.Category}}</td>
+          <td>{{.Namespace}}</td>
+          <td><span class="badge enabled-badge {{if .Enabled}}on{{else}}off{{end}}">{{if .Enabled}}on{{else}}off{{end}}</span></td>
+          <td><span class="badge health-badge {{healthClass .Health}}">{{if .Enabled}}{{.Health}}{{else}}-{{end}}</span></td>
+          <td><span class="badge sync-badge {{syncClass .SyncStatus}}">{{if .Enabled}}{{.SyncStatus}}{{else}}-{{end}}</span></td>
+          <td><button class="toggle-btn" onclick="toggleApp('{{.Name}}', this)">Toggle</button></td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+
+    <div class="links">
+      {{if .ArgoCDURL}}<a href="{{.ArgoCDURL}}" target="_blank">ArgoCD UI</a>{{end}}
+      {{if .HubbleURL}}<a href="{{.HubbleURL}}" target="_blank">Hubble UI</a>{{end}}
+      <span class="refresh-indicator" id="last-refresh">Auto-refresh: 10s</span>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

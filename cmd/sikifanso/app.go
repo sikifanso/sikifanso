@@ -4,8 +4,8 @@ import "github.com/urfave/cli/v3"
 
 func newApp() *cli.Command {
 	return &cli.Command{
-		Name:    "sikifanso",
-		Usage:   "A CLI tool for homelab k8s bootstrap",
+		Name:                  "sikifanso",
+		Usage:                 "A CLI tool for homelab k8s bootstrap",
 		Version:               version,
 		EnableShellCompletion: true,
 		ConfigureShellCompletionCommand: func(cmd *cli.Command) {
@@ -31,6 +31,6 @@ func newApp() *cli.Command {
 			},
 		},
 		Before:   setupAction,
-		Commands: []*cli.Command{clusterCmd(), argocdCmd(), appCmd(), catalogCmd(), statusCmd(), doctorCmd()},
+		Commands: []*cli.Command{clusterCmd(), argocdCmd(), appCmd(), catalogCmd(), statusCmd(), doctorCmd(), snapshotCmd(), restoreCmd(), dashboardCmd(), upgradeCmd()},
 	}
 }

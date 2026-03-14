@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/alicanalbayrak/sikifanso/internal/argocd"
 	"github.com/alicanalbayrak/sikifanso/internal/catalog"
 	"github.com/alicanalbayrak/sikifanso/internal/gitops"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
@@ -30,37 +29,37 @@ func catalogListCmd() *cli.Command {
 	return &cli.Command{
 		Name:   "list",
 		Usage:  "List all catalog applications",
-		Action: catalogListAction,
+		Action: withSession(catalogListAction),
 	}
 }
 
 func catalogEnableCmd() *cli.Command {
 	return &cli.Command{
-		Name:          "enable",
-		Usage:         "Enable a catalog application",
-		ArgsUsage:     "NAME",
-		Action:        catalogEnableAction,
+		Name:      "enable",
+		Usage:     "Enable a catalog application",
+		ArgsUsage: "NAME",
+		Flags:     waitSyncFlags(),
+		Action: withSession(func(ctx context.Context, cmd *cli.Command, sess *session.Session) error {
+			return catalogToggleAction(ctx, cmd, sess, true)
+		}),
 		ShellComplete: catalogAllNamesComplete,
 	}
 }
 
 func catalogDisableCmd() *cli.Command {
 	return &cli.Command{
-		Name:          "disable",
-		Usage:         "Disable a catalog application",
-		ArgsUsage:     "NAME",
-		Action:        catalogDisableAction,
+		Name:      "disable",
+		Usage:     "Disable a catalog application",
+		ArgsUsage: "NAME",
+		Flags:     waitSyncFlags(),
+		Action: withSession(func(ctx context.Context, cmd *cli.Command, sess *session.Session) error {
+			return catalogToggleAction(ctx, cmd, sess, false)
+		}),
 		ShellComplete: catalogEnabledNamesComplete,
 	}
 }
 
-func catalogListAction(_ context.Context, cmd *cli.Command) error {
-	clusterName := cmd.String("cluster")
-	sess, err := session.Load(clusterName)
-	if err != nil {
-		return fmt.Errorf("loading session for cluster %q: %w", clusterName, err)
-	}
-
+func catalogListAction(_ context.Context, cmd *cli.Command, sess *session.Session) error {
 	entries, err := catalog.List(sess.GitOpsPath)
 	if err != nil {
 		return fmt.Errorf("listing catalog: %w", err)
@@ -131,26 +130,12 @@ func catalogListAction(_ context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-func catalogEnableAction(ctx context.Context, cmd *cli.Command) error {
-	return catalogToggleAction(ctx, cmd, true)
-}
-
-func catalogDisableAction(ctx context.Context, cmd *cli.Command) error {
-	return catalogToggleAction(ctx, cmd, false)
-}
-
-func catalogToggleAction(ctx context.Context, cmd *cli.Command, enable bool) error {
+func catalogToggleAction(ctx context.Context, cmd *cli.Command, sess *session.Session, enable bool) error {
 	verb := "enable"
 	past := "enabled"
 	if !enable {
 		verb = "disable"
 		past = "disabled"
-	}
-
-	clusterName := cmd.String("cluster")
-	sess, err := session.Load(clusterName)
-	if err != nil {
-		return fmt.Errorf("loading session for cluster %q: %w", clusterName, err)
 	}
 
 	name := cmd.Args().First()
@@ -181,11 +166,9 @@ func catalogToggleAction(ctx context.Context, cmd *cli.Command, enable bool) err
 	}
 
 	fmt.Fprintf(os.Stderr, "%s %s\n", color.GreenString(name), past)
+	fmt.Fprintln(os.Stderr, "committed to gitops repo")
 
-	zapLogger.Info("triggering argocd sync")
-	if err := argocd.Sync(ctx, zapLogger, clusterName, sess.Services.ArgoCD.URL); err != nil {
-		zapLogger.Warn("argocd sync failed — app will reconcile on next poll", zap.Error(err))
-	}
+	syncAfterMutation(ctx, cmd, sess, name)
 
 	return nil
 }

@@ -5,16 +5,20 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"sort"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/alicanalbayrak/sikifanso/internal/app"
-	"github.com/alicanalbayrak/sikifanso/internal/argocd"
 	"github.com/alicanalbayrak/sikifanso/internal/catalog"
+	"github.com/alicanalbayrak/sikifanso/internal/gitops"
 	"github.com/alicanalbayrak/sikifanso/internal/prompt"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
+	"github.com/alicanalbayrak/sikifanso/internal/tui"
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
+	"golang.org/x/term"
 )
 
 func appCmd() *cli.Command {
@@ -34,7 +38,7 @@ func appAddCmd() *cli.Command {
 		Name:      "add",
 		Usage:     "Add a Helm app to the GitOps repo",
 		ArgsUsage: "[NAME]",
-		Flags: []cli.Flag{
+		Flags: append([]cli.Flag{
 			&cli.StringFlag{
 				Name:  "repo",
 				Usage: "Helm repository URL",
@@ -52,8 +56,8 @@ func appAddCmd() *cli.Command {
 				Name:  "namespace",
 				Usage: "Target namespace",
 			},
-		},
-		Action: appAddAction,
+		}, waitSyncFlags()...),
+		Action: withSession(appAddAction),
 	}
 }
 
@@ -61,7 +65,7 @@ func appListCmd() *cli.Command {
 	return &cli.Command{
 		Name:   "list",
 		Usage:  "List installed apps",
-		Action: appListAction,
+		Action: withSession(appListAction),
 	}
 }
 
@@ -70,16 +74,59 @@ func appRemoveCmd() *cli.Command {
 		Name:          "remove",
 		Usage:         "Remove an app from the GitOps repo",
 		ArgsUsage:     "NAME",
-		Action:        appRemoveAction,
+		Flags:         waitSyncFlags(),
+		Action:        withSession(appRemoveAction),
 		ShellComplete: appNameShellComplete,
 	}
 }
 
-func appAddAction(ctx context.Context, cmd *cli.Command) error {
-	clusterName := cmd.String("cluster")
-	sess, err := session.Load(clusterName)
-	if err != nil {
-		return fmt.Errorf("loading session for cluster %q: %w", clusterName, err)
+func isTerminal() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
+func appAddAction(ctx context.Context, cmd *cli.Command, sess *session.Session) error {
+	// If no args and no flags set and stdin is a TTY, launch interactive catalog browser.
+	if cmd.Args().Len() == 0 && !cmd.IsSet("repo") && !cmd.IsSet("chart") && isTerminal() {
+		entries, err := catalog.List(sess.GitOpsPath)
+		if err != nil {
+			return fmt.Errorf("listing catalog: %w", err)
+		}
+		if len(entries) == 0 {
+			fmt.Fprintln(os.Stderr, "Catalog is empty — use 'sikifanso app add NAME' to add a custom app")
+			return nil
+		}
+
+		toggled, err := tui.Browse(tui.BrowseOpts{Entries: entries})
+		if err != nil {
+			return fmt.Errorf("catalog browser: %w", err)
+		}
+
+		if len(toggled) == 0 {
+			return nil
+		}
+
+		// Apply toggled changes to disk and collect paths for commit.
+		var paths, names []string
+		for name, enabled := range toggled {
+			if err := catalog.SetEnabled(sess.GitOpsPath, name, enabled); err != nil {
+				return fmt.Errorf("setting %s enabled=%v: %w", name, enabled, err)
+			}
+			paths = append(paths, fmt.Sprintf("catalog/%s.yaml", name))
+			names = append(names, name)
+		}
+		sort.Strings(names)
+
+		commitMsg := fmt.Sprintf("catalog: toggle %s", strings.Join(names, ", "))
+		if err := gitops.Commit(sess.GitOpsPath, commitMsg, paths...); err != nil {
+			zapLogger.Error("failed to commit catalog changes", zap.Error(err))
+			return fmt.Errorf("committing changes: %w", err)
+		}
+
+		fmt.Fprintf(os.Stderr, "%s toggled: %s\n", color.GreenString("catalog"), strings.Join(names, ", "))
+		fmt.Fprintln(os.Stderr, "committed to gitops repo")
+
+		syncAfterMutation(ctx, cmd, sess, names...)
+		return nil
 	}
 
 	name := cmd.Args().First()
@@ -129,21 +176,12 @@ func appAddAction(ctx context.Context, cmd *cli.Command) error {
 
 	fmt.Fprintf(os.Stderr, "%s added to gitops repo\n", color.GreenString(name))
 
-	zapLogger.Info("triggering argocd sync")
-	if err := argocd.Sync(ctx, zapLogger, clusterName, sess.Services.ArgoCD.URL); err != nil {
-		zapLogger.Warn("argocd sync failed — app will reconcile on next poll", zap.Error(err))
-	}
+	syncAfterMutation(ctx, cmd, sess, name)
 
 	return nil
 }
 
-func appListAction(_ context.Context, cmd *cli.Command) error {
-	clusterName := cmd.String("cluster")
-	sess, err := session.Load(clusterName)
-	if err != nil {
-		return fmt.Errorf("loading session for cluster %q: %w", clusterName, err)
-	}
-
+func appListAction(_ context.Context, cmd *cli.Command, sess *session.Session) error {
 	apps, err := app.List(sess.GitOpsPath)
 	if err != nil {
 		return fmt.Errorf("listing apps: %w", err)
@@ -180,13 +218,7 @@ func appListAction(_ context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-func appRemoveAction(ctx context.Context, cmd *cli.Command) error {
-	clusterName := cmd.String("cluster")
-	sess, err := session.Load(clusterName)
-	if err != nil {
-		return fmt.Errorf("loading session for cluster %q: %w", clusterName, err)
-	}
-
+func appRemoveAction(ctx context.Context, cmd *cli.Command, sess *session.Session) error {
 	name := cmd.Args().First()
 	if name == "" {
 		return fmt.Errorf("app name is required: sikifanso app remove NAME")
@@ -199,10 +231,7 @@ func appRemoveAction(ctx context.Context, cmd *cli.Command) error {
 
 	fmt.Fprintf(os.Stderr, "%s removed from gitops repo\n", color.GreenString(name))
 
-	zapLogger.Info("triggering argocd sync")
-	if err := argocd.Sync(ctx, zapLogger, clusterName, sess.Services.ArgoCD.URL); err != nil {
-		zapLogger.Warn("argocd sync failed — app will reconcile on next poll", zap.Error(err))
-	}
+	syncAfterMutation(ctx, cmd, sess, name)
 
 	return nil
 }

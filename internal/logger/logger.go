@@ -5,14 +5,19 @@ import (
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // New creates a zap logger that writes to both stderr and the given file path.
 // consoleLevel controls the minimum level for terminal output; the file always logs at DebugLevel.
+// Log files are automatically rotated at 10 MB with 3 compressed backups kept for 7 days.
 func New(filePath string, consoleLevel zapcore.Level) (*zap.Logger, func(), error) {
-	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return nil, nil, err
+	lj := &lumberjack.Logger{
+		Filename:   filePath,
+		MaxSize:    10, // MB
+		MaxBackups: 3,
+		MaxAge:     7, // days
+		Compress:   true,
 	}
 
 	consoleEncoderCfg := zap.NewProductionEncoderConfig()
@@ -28,9 +33,9 @@ func New(filePath string, consoleLevel zapcore.Level) (*zap.Logger, func(), erro
 	consoleEncoder := zapcore.NewConsoleEncoder(consoleEncoderCfg)
 	consoleCore := zapcore.NewCore(consoleEncoder, zapcore.Lock(os.Stderr), consoleLevel)
 
-	// File: JSON for structured log parsing (no color codes)
+	// File: JSON for structured log parsing (no color codes) with rotation
 	jsonEncoder := zapcore.NewJSONEncoder(fileEncoderCfg)
-	fileCore := zapcore.NewCore(jsonEncoder, zapcore.AddSync(file), zapcore.DebugLevel)
+	fileCore := zapcore.NewCore(jsonEncoder, zapcore.AddSync(lj), zapcore.DebugLevel)
 
 	// Tee both outputs together
 	core := zapcore.NewTee(consoleCore, fileCore)
@@ -38,7 +43,7 @@ func New(filePath string, consoleLevel zapcore.Level) (*zap.Logger, func(), erro
 
 	cleanup := func() {
 		_ = logger.Sync()
-		_ = file.Close()
+		_ = lj.Close()
 	}
 
 	return logger, cleanup, nil
