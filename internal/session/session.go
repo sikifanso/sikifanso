@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/alicanalbayrak/sikifanso/internal/paths"
 	"sigs.k8s.io/yaml"
 )
 
@@ -48,29 +49,15 @@ type K3dConfigInfo struct {
 }
 
 const (
-	baseDir     = ".sikifanso"
 	clusterDir  = "clusters"
 	sessionFile = "session.yaml"
 	gitopsDir   = "gitops"
 )
 
-// rootDir returns the sikifanso root directory.
-// It checks SIKIFANSO_HOME first, falling back to ~/.sikifanso.
-func rootDir() (string, error) {
-	if v := os.Getenv("SIKIFANSO_HOME"); v != "" {
-		return v, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("getting home directory: %w", err)
-	}
-	return filepath.Join(home, baseDir), nil
-}
-
 // Dir returns the session directory for the given cluster name:
 // ~/.sikifanso/clusters/<name>/
 func Dir(clusterName string) (string, error) {
-	root, err := rootDir()
+	root, err := paths.RootDir()
 	if err != nil {
 		return "", err
 	}
@@ -131,7 +118,7 @@ func Load(clusterName string) (*Session, error) {
 
 // ListAll returns sessions for every cluster that has a saved session file.
 func ListAll() ([]*Session, error) {
-	root, err := rootDir()
+	root, err := paths.RootDir()
 	if err != nil {
 		return nil, fmt.Errorf("getting root directory: %w", err)
 	}

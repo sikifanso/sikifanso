@@ -13,11 +13,6 @@ func newApp() *cli.Command {
 		},
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:  "log-file",
-				Usage: "Path to log file",
-				Value: "sikifanso.log",
-			},
-			&cli.StringFlag{
 				Name:  "log-level",
 				Usage: "Console log level (debug, info, warn, error)",
 				Value: "info",

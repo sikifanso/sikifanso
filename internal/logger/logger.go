@@ -1,19 +1,41 @@
 package logger
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 
+	"github.com/alicanalbayrak/sikifanso/internal/paths"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-// New creates a zap logger that writes to both stderr and the given file path.
+// defaultLogPath returns the path to the sikifanso log file under ~/.sikifanso/clusters/.
+func defaultLogPath() (string, error) {
+	root, err := paths.RootDir()
+	if err != nil {
+		return "", err
+	}
+
+	dir := filepath.Join(root, "clusters")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("creating log directory: %w", err)
+	}
+	return filepath.Join(dir, "sikifanso.log"), nil
+}
+
+// New creates a zap logger that writes to both stderr and ~/.sikifanso/clusters/sikifanso.log.
 // consoleLevel controls the minimum level for terminal output; the file always logs at DebugLevel.
 // Log files are automatically rotated at 10 MB with 3 compressed backups kept for 7 days.
-func New(filePath string, consoleLevel zapcore.Level) (*zap.Logger, func(), error) {
+func New(consoleLevel zapcore.Level) (*zap.Logger, func(), error) {
+	logPath, err := defaultLogPath()
+	if err != nil {
+		return nil, nil, err
+	}
+
 	lj := &lumberjack.Logger{
-		Filename:   filePath,
+		Filename:   logPath,
 		MaxSize:    10, // MB
 		MaxBackups: 3,
 		MaxAge:     7, // days

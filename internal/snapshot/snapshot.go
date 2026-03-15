@@ -13,6 +13,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
+	"github.com/alicanalbayrak/sikifanso/internal/paths"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
 )
 
@@ -31,22 +32,10 @@ const (
 	gitopsPrefix = "gitops"
 )
 
-// rootDir returns the sikifanso root directory.
-// It checks SIKIFANSO_HOME first, falling back to ~/.sikifanso.
-func rootDir() (string, error) {
-	if v := os.Getenv("SIKIFANSO_HOME"); v != "" {
-		return v, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("getting home directory: %w", err)
-	}
-	return filepath.Join(home, ".sikifanso"), nil
-}
 
 // SnapshotsDir returns the snapshots directory, creating it if it doesn't exist.
 func SnapshotsDir() (string, error) {
-	root, err := rootDir()
+	root, err := paths.RootDir()
 	if err != nil {
 		return "", err
 	}
@@ -138,7 +127,7 @@ func Capture(clusterName, snapshotName, cliVersion string) (archivePath string, 
 // List returns metadata for all snapshots, sorted by CreatedAt descending.
 // If the snapshots directory doesn't exist, it returns nil, nil.
 func List() ([]Meta, error) {
-	root, err := rootDir()
+	root, err := paths.RootDir()
 	if err != nil {
 		return nil, err
 	}

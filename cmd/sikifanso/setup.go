@@ -25,7 +25,7 @@ func setupAction(ctx context.Context, cmd *cli.Command) (context.Context, error)
 	}
 
 	var err error
-	zapLogger, logCleanup, err = logger.New(cmd.String("log-file"), consoleLevel)
+	zapLogger, logCleanup, err = logger.New(consoleLevel)
 	if err != nil {
 		return ctx, err
 	}

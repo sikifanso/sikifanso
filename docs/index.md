@@ -42,6 +42,9 @@ sikifanso cluster create
 - **GitOps repo** — scaffolded from a bootstrap template, mounted into the cluster
 - **App catalog** — 20+ curated apps ready to enable with `sikifanso catalog enable <name>`
 - **Root ApplicationSets** — one for custom apps, one for the curated catalog
+- **Snapshots** — capture and restore cluster configuration with `sikifanso snapshot` / `sikifanso restore`
+- **Dashboard** — local web dashboard at `http://localhost:9090` via `sikifanso dashboard`
+- **Upgrades** — upgrade Cilium and ArgoCD in-place with `sikifanso upgrade`
 
 No remote git server. No cloud account. Just Docker and a single command.
 
