@@ -173,6 +173,10 @@ The `--cluster` flag can also be set via `SIKIFANSO_CLUSTER` env var.
 | `doctor` | Run health checks on the cluster and its components |
 | `status [NAME]` | Show cluster state, nodes, and pods |
 | `argocd sync` | Force immediate ArgoCD reconciliation |
+| `snapshot` | Capture cluster configuration state to a `.tar.gz` archive |
+| `restore NAME` | Restore a cluster from a snapshot |
+| `dashboard` | Start the local web dashboard |
+| `upgrade` | Upgrade cluster components (Cilium, ArgoCD) |
 
 ## Health checks
 
@@ -196,6 +200,24 @@ ok  ArgoCD              3/3 deployments ready
 Each failure includes the root cause and a suggested fix command.
 
 If no cluster session exists, `doctor` still runs the Docker check and reports the missing cluster.
+
+## Snapshots
+
+```bash
+sikifanso snapshot --name before-upgrade
+sikifanso snapshot list
+sikifanso restore before-upgrade
+```
+
+Capture and restore cluster configuration state (session metadata + gitops repo). Snapshots are stored at `~/.sikifanso/snapshots/`.
+
+## Dashboard
+
+```bash
+sikifanso dashboard
+```
+
+Starts a local web dashboard at `http://localhost:9090`. Opens your browser automatically.
 
 ## Multi-cluster
 

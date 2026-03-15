@@ -94,7 +94,7 @@ Add a custom Helm chart to the gitops repo. Writes a coordinate file and a stub 
 
 ```bash
 sikifanso app add podinfo --repo https://stefanprodan.github.io/podinfo --chart podinfo --version 6.10.1 --namespace podinfo
-sikifanso app add   # interactive — prompts for all fields
+sikifanso app add   # interactive — see below
 ```
 
 | Flag | Default | Description |
@@ -103,8 +103,15 @@ sikifanso app add   # interactive — prompts for all fields
 | `--chart` | *(app name)* | Chart name within the repository |
 | `--version` | `*` | Chart version (targetRevision) |
 | `--namespace` | *(app name)* | Kubernetes namespace to deploy into |
+| `--wait` | `false` | Wait for the app to reach Synced/Healthy after sync |
+| `--timeout` | `2m` | Timeout for `--wait` mode |
 
-If any flag is omitted, the CLI prompts interactively. The name can be passed as a positional argument or entered at the prompt.
+**Interactive mode** has two paths:
+
+- **No args, no flags, TTY** → launches a TUI catalog browser where you can toggle catalog apps on/off with a single keypress
+- **Name given but flags missing** → prompts for each missing field individually
+
+If all flags are provided, no prompts are shown.
 
 Creates two files in the gitops repo:
 
@@ -133,11 +140,17 @@ Remove a custom app from the gitops repo. Deletes the coordinate and values file
 
 ```bash
 sikifanso app remove podinfo
+sikifanso app remove podinfo --wait
 ```
 
 | Argument | Description |
 |----------|-------------|
 | `NAME` | App name to remove (required) |
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--wait` | `false` | Wait for sync to complete after removal |
+| `--timeout` | `2m` | Timeout for `--wait` mode |
 
 Shell completion is supported -- press Tab to see available app names.
 
@@ -164,11 +177,17 @@ Enable a catalog app. Sets `enabled: true` in the catalog entry, commits, and tr
 
 ```bash
 sikifanso catalog enable prometheus-stack
+sikifanso catalog enable prometheus-stack --wait
 ```
 
 | Argument | Description |
 |----------|-------------|
 | `NAME` | Catalog app name to enable (required) |
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--wait` | `false` | Wait for the app to reach Synced/Healthy after sync |
+| `--timeout` | `2m` | Timeout for `--wait` mode |
 
 If the app is already enabled, prints a message and does nothing. If the app name is not found, returns an error listing all available catalog apps.
 
@@ -180,11 +199,17 @@ Disable a catalog app. Sets `enabled: false` in the catalog entry, commits, and 
 
 ```bash
 sikifanso catalog disable prometheus-stack
+sikifanso catalog disable prometheus-stack --wait
 ```
 
 | Argument | Description |
 |----------|-------------|
 | `NAME` | Catalog app name to disable (required) |
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--wait` | `false` | Wait for sync to complete after disabling |
+| `--timeout` | `2m` | Timeout for `--wait` mode |
 
 If the app is already disabled, prints a message and does nothing.
 
@@ -248,10 +273,128 @@ Force immediate ArgoCD reconciliation. Bypasses the default 3-minute polling int
 
 ```bash
 sikifanso argocd sync
+sikifanso argocd sync --wait
+sikifanso argocd sync --app podinfo
 sikifanso argocd sync --cluster mylab
 ```
 
-Uses the `--cluster` global flag to target a specific cluster.
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--wait` | `false` | Wait for all apps to reach Synced/Healthy |
+| `--app` | *(none)* | Sync a specific application by name |
+| `--timeout` | `2m` | Timeout for `--wait` mode |
+| `--skip-unhealthy` | `false` | Skip syncing Degraded applications |
+
+When `--app` is set, only that application is synced. When `--wait` is set (without `--app`), the command blocks until all applications reach Synced/Healthy or the timeout expires.
+
+### `snapshot`
+
+Capture the cluster's configuration state (session metadata + gitops repo) into a `.tar.gz` archive stored at `~/.sikifanso/snapshots/`.
+
+```bash
+sikifanso snapshot --name before-upgrade
+sikifanso snapshot list
+sikifanso snapshot delete old-snapshot
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--name` | *(none)* | Snapshot name (required) |
+
+#### `snapshot list`
+
+List all available snapshots. Shows name, cluster, creation time, and CLI version.
+
+```bash
+sikifanso snapshot list
+```
+
+No flags beyond the global `--cluster`.
+
+#### `snapshot delete NAME`
+
+Delete a snapshot archive.
+
+```bash
+sikifanso snapshot delete old-snapshot
+```
+
+| Argument | Description |
+|----------|-------------|
+| `NAME` | Snapshot name to delete (required) |
+
+Shell completion is supported -- press Tab to see available snapshot names.
+
+### `restore NAME`
+
+Restore a cluster's configuration from a snapshot. This restores the session metadata and gitops repo only — you must run `sikifanso cluster create` afterward to recreate the cluster infrastructure.
+
+```bash
+sikifanso restore before-upgrade
+```
+
+| Argument | Description |
+|----------|-------------|
+| `NAME` | Snapshot name to restore (required) |
+
+Shell completion is supported -- press Tab to see available snapshot names.
+
+### `dashboard`
+
+Start the local web dashboard. Opens a browser automatically unless `--no-browser` is set. Press Ctrl+C to stop.
+
+```bash
+sikifanso dashboard
+sikifanso dashboard --addr :8080
+sikifanso dashboard --no-browser
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--addr` | `:9090` | Listen address |
+| `--no-browser` | `false` | Don't open browser automatically |
+
+### `upgrade`
+
+Upgrade cluster components (Cilium and ArgoCD). Takes a pre-upgrade snapshot by default. Without `--all`, shows subcommand help.
+
+```bash
+sikifanso upgrade --all
+sikifanso upgrade --all --skip-snapshot
+sikifanso upgrade cilium
+sikifanso upgrade argocd
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--all` | `false` | Upgrade all components |
+| `--skip-snapshot` | `false` | Skip pre-upgrade snapshot |
+
+#### `upgrade cilium`
+
+Upgrade Cilium CNI only.
+
+```bash
+sikifanso upgrade cilium
+sikifanso upgrade cilium --skip-snapshot
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--skip-snapshot` | `false` | Skip pre-upgrade snapshot |
+
+#### `upgrade argocd`
+
+Upgrade ArgoCD only.
+
+```bash
+sikifanso upgrade argocd
+sikifanso upgrade argocd --skip-snapshot
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--skip-snapshot` | `false` | Skip pre-upgrade snapshot |
 
 ## Environment variables
 

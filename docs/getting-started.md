@@ -64,7 +64,9 @@ sikifanso app add podinfo \
   --namespace podinfo
 ```
 
-This writes the chart coordinates and a stub values file to your gitops repo, auto-commits, and triggers an ArgoCD sync. If you omit any flags, the CLI prompts interactively.
+This writes the chart coordinates and a stub values file to your gitops repo, auto-commits, and triggers an ArgoCD sync.
+
+Running `sikifanso app add` with no arguments and no flags launches a **TUI catalog browser** where you can toggle catalog apps interactively. If you provide a name but omit flags, the CLI prompts for each missing field.
 
 ## List installed apps
 
@@ -127,6 +129,15 @@ sikifanso cluster start
 
 # Delete the cluster entirely
 sikifanso cluster delete
+
+# Take a snapshot of your cluster config
+sikifanso snapshot --name my-backup
+
+# Restore from a snapshot
+sikifanso restore my-backup
+
+# Start the web dashboard
+sikifanso dashboard
 ```
 
 ## Next steps
@@ -135,3 +146,4 @@ sikifanso cluster delete
 - [Custom Bootstrap Repos](guides/custom-bootstrap.md) — use your own bootstrap template
 - [Architecture](architecture.md) — understand how it all fits together
 - [CLI Reference](cli.md) — full list of commands and flags
+- [Roadmap](roadmap.md) — what's shipped and what's next

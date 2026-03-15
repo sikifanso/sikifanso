@@ -29,7 +29,7 @@ A `--cni` flag on `cluster create` could let users choose.
 
 ## App catalog -- shipped
 
-The curated app catalog is now available via `sikifanso catalog list/enable/disable`. The bootstrap repo includes 20+ pre-defined apps across monitoring, media, homelab, and dev categories. Enable any catalog app with `sikifanso catalog enable <name>` -- no need to look up repo URLs or chart names. Custom Helm charts can still be deployed via `sikifanso app add`.
+The curated app catalog is now available via `sikifanso catalog list/enable/disable`. The bootstrap repo includes 20+ pre-defined apps across monitoring, media, homelab, and dev categories. Enable any catalog app with `sikifanso catalog enable <name>` -- no need to look up repo URLs or chart names. Custom Helm charts can still be deployed via `sikifanso app add`. Running `sikifanso app add` with no arguments launches a TUI catalog browser for interactive toggling.
 
 ## Cluster templates
 
@@ -54,6 +54,14 @@ Currently fixed at 1 server + 2 agents. Possibilities:
 - HA control plane (3 servers)
 - Dedicated nodes for specific workloads (labeled/tainted)
 
-## Backup and restore
+## Dashboard -- shipped
 
-Snapshot a cluster's state (gitops repo + session metadata) and restore it later or on a different machine.
+`sikifanso dashboard` starts a local web dashboard at `http://localhost:9090`. Configurable with `--addr` and `--no-browser` flags. See the [CLI reference](cli.md#dashboard) for details.
+
+## Component upgrades -- shipped
+
+`sikifanso upgrade` upgrades Cilium and ArgoCD. Use `--all` to upgrade everything, or target individual components with `sikifanso upgrade cilium` / `sikifanso upgrade argocd`. Takes a pre-upgrade snapshot by default (skip with `--skip-snapshot`). See the [CLI reference](cli.md#upgrade) for details.
+
+## Backup and restore -- shipped
+
+`sikifanso snapshot` captures the cluster's configuration state (session metadata + gitops repo) into a `.tar.gz` archive stored at `~/.sikifanso/snapshots/`. Use `sikifanso snapshot list` to see available snapshots and `sikifanso snapshot delete NAME` to remove one. `sikifanso restore NAME` recreates a cluster's configuration from a snapshot (run `sikifanso cluster create` afterward to rebuild the infrastructure). See the [CLI reference](cli.md#snapshot) for details.

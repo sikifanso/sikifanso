@@ -98,6 +98,10 @@ Cluster metadata is persisted to `~/.sikifanso/clusters/<name>/session.yaml` and
 
 This file is read on every CLI command to locate and interact with the cluster.
 
+## Snapshot storage
+
+Snapshots are stored at `~/.sikifanso/snapshots/<name>.tar.gz`. Each archive contains the session metadata and the full gitops repo directory, allowing a cluster's configuration to be captured and restored independently of the running infrastructure.
+
 ## Port allocation
 
 Each cluster gets its own set of ports. Defaults are:
@@ -106,3 +110,5 @@ Each cluster gets its own set of ports. Defaults are:
 - **30081** — Hubble UI
 
 If defaults are taken by another cluster, sikifanso automatically finds free ports. Port assignments are stored in `session.yaml`.
+
+The dashboard listens on `:9090` by default, independent of cluster port mappings (configurable via `--addr`).
