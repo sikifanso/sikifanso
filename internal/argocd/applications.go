@@ -14,6 +14,9 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+// DefaultNamespace is the default namespace where ArgoCD is installed.
+const DefaultNamespace = "argocd"
+
 var applicationGVR = schema.GroupVersionResource{
 	Group:    "argoproj.io",
 	Version:  "v1alpha1",
@@ -30,9 +33,14 @@ type AppParams struct {
 	Values       map[string]interface{}
 }
 
-// CreateApplications registers each app as an ArgoCD Application CRD.
+// CreateApplications registers each app as an ArgoCD Application CRD
+// in the given argocdNamespace. If empty, it defaults to "argocd".
 // If an Application already exists, it logs a warning and continues.
-func CreateApplications(ctx context.Context, log *zap.Logger, apps ...AppParams) error {
+func CreateApplications(ctx context.Context, log *zap.Logger, argocdNamespace string, apps ...AppParams) error {
+	if argocdNamespace == "" {
+		argocdNamespace = DefaultNamespace
+	}
+
 	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
 	if err != nil {
 		return fmt.Errorf("building kubeconfig: %w", err)
@@ -44,13 +52,13 @@ func CreateApplications(ctx context.Context, log *zap.Logger, apps ...AppParams)
 	}
 
 	for _, app := range apps {
-		obj, err := buildApplication(app)
+		obj, err := buildApplication(app, argocdNamespace)
 		if err != nil {
 			return fmt.Errorf("building application %q: %w", app.Name, err)
 		}
 
 		log.Info("creating argocd application", zap.String("name", app.Name))
-		_, err = dc.Resource(applicationGVR).Namespace("argocd").Create(ctx, obj, metav1.CreateOptions{})
+		_, err = dc.Resource(applicationGVR).Namespace(argocdNamespace).Create(ctx, obj, metav1.CreateOptions{})
 		if err != nil {
 			if apierrors.IsAlreadyExists(err) {
 				log.Warn("argocd application already exists, skipping", zap.String("name", app.Name))
@@ -64,7 +72,7 @@ func CreateApplications(ctx context.Context, log *zap.Logger, apps ...AppParams)
 	return nil
 }
 
-func buildApplication(app AppParams) (*unstructured.Unstructured, error) {
+func buildApplication(app AppParams, argocdNamespace string) (*unstructured.Unstructured, error) {
 	source := map[string]interface{}{
 		"repoURL":        app.RepoURL,
 		"chart":          app.ChartName,
@@ -88,7 +96,7 @@ func buildApplication(app AppParams) (*unstructured.Unstructured, error) {
 			"kind":       "Application",
 			"metadata": map[string]interface{}{
 				"name":      app.Name,
-				"namespace": "argocd",
+				"namespace": argocdNamespace,
 				"finalizers": []interface{}{
 					"resources-finalizer.argocd.argoproj.io",
 				},

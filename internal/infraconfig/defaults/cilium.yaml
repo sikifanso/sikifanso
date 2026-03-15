@@ -1,0 +1,5 @@
+repoURL: https://helm.cilium.io/
+chart: cilium
+targetRevision: ""
+namespace: kube-system
+releaseName: cilium

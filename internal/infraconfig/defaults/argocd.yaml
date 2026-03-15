@@ -1,0 +1,5 @@
+repoURL: https://argoproj.github.io/argo-helm
+chart: argo-cd
+targetRevision: ""
+namespace: argocd
+releaseName: argocd

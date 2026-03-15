@@ -22,8 +22,9 @@ var applicationGVR = schema.GroupVersionResource{
 // AppsCheck verifies the health and sync status of each enabled catalog app
 // by querying the ArgoCD Application CRD via the dynamic client.
 type AppsCheck struct {
-	DynClient  dynamic.Interface
-	GitOpsPath string
+	DynClient       dynamic.Interface
+	GitOpsPath      string
+	ArgoCDNamespace string
 }
 
 func (c AppsCheck) Run(ctx context.Context) []Result {
@@ -49,7 +50,11 @@ func (c AppsCheck) Run(ctx context.Context) []Result {
 func (c AppsCheck) checkApp(ctx context.Context, entry catalog.Entry) Result {
 	name := fmt.Sprintf("App: %s", entry.Name)
 
-	app, err := c.DynClient.Resource(applicationGVR).Namespace("argocd").Get(ctx, entry.Name, metav1.GetOptions{})
+	ns := c.ArgoCDNamespace
+	if ns == "" {
+		ns = "argocd"
+	}
+	app, err := c.DynClient.Resource(applicationGVR).Namespace(ns).Get(ctx, entry.Name, metav1.GetOptions{})
 	if err != nil {
 		return Result{
 			Name:  name,

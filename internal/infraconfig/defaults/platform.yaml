@@ -1,0 +1,8 @@
+k3sImage: "rancher/k3s:v1.29.1-k3s2"
+servers: 1
+agents: 2
+nodePorts:
+  http: 30082
+  https: 30083
+  argocdUI: 30080
+  hubbleUI: 30081

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/alicanalbayrak/sikifanso/internal/doctor"
+	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
 	"github.com/alicanalbayrak/sikifanso/internal/kube"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
 	"github.com/fatih/color"
@@ -53,13 +54,18 @@ func doctorAction(ctx context.Context, cmd *cli.Command) error {
 		return printResults(results)
 	}
 
-	checks = append(checks, doctor.ClusterChecks(cs)...)
+	cfg, cfgErr := infraconfig.Load(sess.GitOpsPath)
+	if cfgErr != nil {
+		zapLogger.Warn("could not load infrastructure config, using defaults", zap.Error(cfgErr))
+		cfg = infraconfig.Defaults()
+	}
+	checks = append(checks, doctor.ClusterChecks(cs, cfg)...)
 
 	restCfg, err := kube.RESTConfigForCluster(clusterName)
 	if err == nil {
 		dynClient, dynErr := dynamic.NewForConfig(restCfg)
 		if dynErr == nil {
-			checks = append(checks, doctor.AppChecks(dynClient, sess.GitOpsPath)...)
+			checks = append(checks, doctor.AppChecks(dynClient, sess.GitOpsPath, cfg)...)
 		} else {
 			zapLogger.Warn("could not create dynamic client", zap.Error(dynErr))
 		}

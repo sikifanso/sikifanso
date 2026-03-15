@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alicanalbayrak/sikifanso/internal/helm"
+	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
 	"github.com/briandowns/spinner"
 	"github.com/docker/docker/client"
 	"go.uber.org/zap"
@@ -17,19 +18,9 @@ import (
 )
 
 const (
-	namespace    = "kube-system"
 	nodeTimeout  = 2 * time.Minute
 	pollInterval = 5 * time.Second
 )
-
-var helmParams = helm.InstallParams{
-	Namespace:     namespace,
-	RepoURL:       "https://helm.cilium.io/",
-	ChartName:     "cilium",
-	ReleaseName:   "cilium",
-	Timeout:       5 * time.Minute,
-	SpinnerSuffix: " Deploying Cilium to kube-system (this may take a few minutes)...",
-}
 
 // InstallResult holds metadata from a successful Cilium install.
 type InstallResult struct {
@@ -38,9 +29,10 @@ type InstallResult struct {
 }
 
 // Install deploys Cilium into the k3d cluster using the Helm Go SDK.
-// On failure the cluster is intentionally left running so the user can
-// debug with kubectl.
-func Install(ctx context.Context, log *zap.Logger, clusterName string) (*InstallResult, error) {
+// Chart coordinates and pre-merged values (including runtime overrides)
+// are provided by the caller. On failure the cluster is intentionally
+// left running so the user can debug with kubectl.
+func Install(ctx context.Context, log *zap.Logger, clusterName string, chart infraconfig.ChartConfig, vals map[string]interface{}) (*InstallResult, error) {
 	containerName := fmt.Sprintf("k3d-%s-server-0", clusterName)
 	log.Info("detecting API server IP", zap.String("container", containerName))
 	apiServerIP, err := detectAPIServerIP(ctx, clusterName)
@@ -49,21 +41,28 @@ func Install(ctx context.Context, log *zap.Logger, clusterName string) (*Install
 	}
 	log.Info("detected API server IP", zap.String("ip", apiServerIP))
 
-	vals := Values(apiServerIP)
+	params := helm.InstallParams{
+		Namespace:     chart.Namespace,
+		RepoURL:       chart.RepoURL,
+		ChartName:     chart.Chart,
+		ReleaseName:   chart.ReleaseName,
+		Timeout:       5 * time.Minute,
+		SpinnerSuffix: fmt.Sprintf(" Deploying Cilium to %s (this may take a few minutes)...", chart.Namespace),
+	}
 
-	cfg, settings, err := helm.Setup(log, namespace)
+	cfg, settings, err := helm.Setup(log, chart.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("helm setup: %w", err)
 	}
 
-	log.Info("downloading cilium chart", zap.String("repo", helmParams.RepoURL))
-	ch, err := helm.LocateChart(cfg, settings, helmParams)
+	log.Info("downloading cilium chart", zap.String("repo", params.RepoURL))
+	ch, err := helm.LocateChart(cfg, settings, params)
 	if err != nil {
 		return nil, fmt.Errorf("locating cilium chart: %w", err)
 	}
 	log.Info("chart downloaded", zap.String("version", ch.Metadata.Version))
 
-	if err := helm.Deploy(ctx, cfg, ch, vals, helmParams); err != nil {
+	if err := helm.Deploy(ctx, cfg, ch, vals, params); err != nil {
 		return nil, fmt.Errorf("helm install cilium: %w", err)
 	}
 	log.Info("cilium deployed successfully")

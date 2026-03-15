@@ -11,6 +11,7 @@ import (
 	"github.com/alicanalbayrak/sikifanso/internal/argocd"
 	"github.com/alicanalbayrak/sikifanso/internal/cilium"
 	"github.com/alicanalbayrak/sikifanso/internal/gitops"
+	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
 	k3dclient "github.com/k3d-io/k3d/v5/pkg/client"
 	k3dconfig "github.com/k3d-io/k3d/v5/pkg/config"
@@ -18,14 +19,6 @@ import (
 	conf "github.com/k3d-io/k3d/v5/pkg/config/v1alpha5"
 	k3drt "github.com/k3d-io/k3d/v5/pkg/runtimes"
 	k3d "github.com/k3d-io/k3d/v5/pkg/types"
-)
-
-// TODO - Make these configurable
-// TODO - Renovate ?
-const (
-	k3sImage   = "rancher/k3s:v1.29.1-k3s2"
-	k3dServers = 1
-	k3dAgents  = 2
 )
 
 // Options configures cluster creation.
@@ -74,12 +67,19 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 		return nil, fmt.Errorf("scaffolding gitops repo: %w", err)
 	}
 
+	// Load infrastructure config from the bootstrap repo, falling back to defaults.
+	cfg, err := infraconfig.Load(gitopsDir)
+	if err != nil {
+		return nil, fmt.Errorf("loading infrastructure config: %w", err)
+	}
+
 	// Prevent k3d DNS fix that breaks Docker Desktop.
 	// See: https://github.com/k3d-io/k3d/issues/1515
 	_ = os.Setenv("K3D_FIX_DNS", "0")
 
 	log.Info("creating k3d cluster", zap.String("cluster", name))
 
+	np := cfg.Platform.NodePorts
 	simpleCfg := conf.SimpleConfig{
 		TypeMeta: configtypes.TypeMeta{
 			Kind:       "Simple",
@@ -88,17 +88,17 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 		ObjectMeta: configtypes.ObjectMeta{
 			Name: name,
 		},
-		Servers: k3dServers,
-		Agents:  k3dAgents,
-		Image:   k3sImage,
+		Servers: cfg.Platform.Servers,
+		Agents:  cfg.Platform.Agents,
+		Image:   cfg.Platform.K3sImage,
 		ExposeAPI: conf.SimpleExposureOpts{
 			HostPort: fmt.Sprintf("%d", hp.APIServer),
 		},
 		Ports: []conf.PortWithNodeFilters{
-			{Port: fmt.Sprintf("%d:30082", hp.HTTP), NodeFilters: []string{"server:*"}},
-			{Port: fmt.Sprintf("%d:30083", hp.HTTPS), NodeFilters: []string{"server:*"}},
-			{Port: fmt.Sprintf("%d:30080", hp.ArgoCDUI), NodeFilters: []string{"server:*"}},
-			{Port: fmt.Sprintf("%d:30081", hp.HubbleUI), NodeFilters: []string{"server:*"}},
+			{Port: fmt.Sprintf("%d:%d", hp.HTTP, np.HTTP), NodeFilters: []string{"server:*"}},
+			{Port: fmt.Sprintf("%d:%d", hp.HTTPS, np.HTTPS), NodeFilters: []string{"server:*"}},
+			{Port: fmt.Sprintf("%d:%d", hp.ArgoCDUI, np.ArgoCDUI), NodeFilters: []string{"server:*"}},
+			{Port: fmt.Sprintf("%d:%d", hp.HubbleUI, np.HubbleUI), NodeFilters: []string{"server:*"}},
 		},
 		Volumes: []conf.VolumeWithNodeFilters{
 			{
@@ -152,28 +152,39 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 		return nil, fmt.Errorf("writing kubeconfig: %w", err)
 	}
 
-	ciliumResult, err := cilium.Install(ctx, log, name)
+	// Cilium values: base config + runtime overrides (node ports).
+	// k8sServiceHost is a placeholder here; cilium.Install detects the actual IP
+	// and it's already in the values passed to CreateApplications.
+	ciliumValues := infraconfig.MergeValues(cfg.CiliumValues, infraconfig.CiliumRuntimeOverrides(np, ""))
+
+	ciliumResult, err := cilium.Install(ctx, log, name, cfg.Cilium, ciliumValues)
 	if err != nil {
 		return nil, fmt.Errorf("installing cilium: %w", err)
 	}
 
-	argocdResult, err := argocd.Install(ctx, log)
+	// Update cilium values with the actual API server IP for the ArgoCD Application CRD.
+	ciliumValues = infraconfig.MergeValues(cfg.CiliumValues, infraconfig.CiliumRuntimeOverrides(np, ciliumResult.APIServerIP))
+
+	// ArgoCD values: base config + runtime overrides (node port).
+	argocdValues := infraconfig.MergeValues(cfg.ArgoCDValues, infraconfig.ArgoCDRuntimeOverrides(np))
+
+	argocdResult, err := argocd.Install(ctx, log, cfg.ArgoCD, argocdValues)
 	if err != nil {
 		return nil, fmt.Errorf("installing argocd: %w", err)
 	}
 
-	if err := argocd.CreateApplications(ctx, log,
+	if err := argocd.CreateApplications(ctx, log, cfg.ArgoCD.Namespace,
 		argocd.AppParams{
-			Name: "cilium", Namespace: "kube-system",
-			RepoURL: "https://helm.cilium.io/", ChartName: "cilium",
+			Name: cfg.Cilium.ReleaseName, Namespace: cfg.Cilium.Namespace,
+			RepoURL: cfg.Cilium.RepoURL, ChartName: cfg.Cilium.Chart,
 			ChartVersion: ciliumResult.ChartVersion,
-			Values:       cilium.Values(ciliumResult.APIServerIP),
+			Values:       ciliumValues,
 		},
 		argocd.AppParams{
-			Name: "argocd", Namespace: "argocd",
-			RepoURL: "https://argoproj.github.io/argo-helm", ChartName: "argo-cd",
+			Name: cfg.ArgoCD.ReleaseName, Namespace: cfg.ArgoCD.Namespace,
+			RepoURL: cfg.ArgoCD.RepoURL, ChartName: cfg.ArgoCD.Chart,
 			ChartVersion: argocdResult.ChartVersion,
-			Values:       argocd.Values(),
+			Values:       argocdValues,
 		},
 	); err != nil {
 		return nil, fmt.Errorf("creating argocd applications: %w", err)
@@ -204,9 +215,9 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 			},
 		},
 		K3dConfig: session.K3dConfigInfo{
-			Image:   k3sImage,
-			Servers: k3dServers,
-			Agents:  k3dAgents,
+			Image:   cfg.Platform.K3sImage,
+			Servers: cfg.Platform.Servers,
+			Agents:  cfg.Platform.Agents,
 		},
 	}
 

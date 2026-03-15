@@ -13,13 +13,19 @@ const (
 	fixHubble       = "sikifanso argocd sync"
 )
 
-// HubbleCheck verifies that the hubble-relay Deployment in kube-system is Available.
+// HubbleCheck verifies that the hubble-relay Deployment is Available.
 type HubbleCheck struct {
-	Client *kubernetes.Clientset
+	Client    *kubernetes.Clientset
+	Namespace string
 }
 
 func (c HubbleCheck) Run(ctx context.Context) []Result {
-	deploy, err := c.Client.AppsV1().Deployments("kube-system").Get(ctx, "hubble-relay", metav1.GetOptions{})
+	ns := c.Namespace
+	if ns == "" {
+		ns = "kube-system"
+	}
+
+	deploy, err := c.Client.AppsV1().Deployments(ns).Get(ctx, "hubble-relay", metav1.GetOptions{})
 	if err != nil {
 		return []Result{{
 			Name:  checkNameHubble,

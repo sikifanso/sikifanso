@@ -1,0 +1,66 @@
+k8sServicePort: 6443
+kubeProxyReplacement: true
+
+ingressController:
+  enabled: true
+  default: true
+  loadbalancerMode: shared
+  service:
+    type: NodePort
+
+hubble:
+  enabled: true
+  relay:
+    enabled: true
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  ui:
+    enabled: true
+    ingress:
+      enabled: false
+    service:
+      type: NodePort
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+operator:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+ipam:
+  mode: kubernetes
+
+bpf:
+  masquerade: true
+  hostLegacyRouting: false
+
+routingMode: tunnel
+tunnelProtocol: vxlan
+policyEnforcementMode: default
+
+debug:
+  enabled: false

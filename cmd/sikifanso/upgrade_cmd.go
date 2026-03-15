@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 
+	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
 	"github.com/alicanalbayrak/sikifanso/internal/kube"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
 	"github.com/alicanalbayrak/sikifanso/internal/upgrade"
@@ -44,11 +45,22 @@ func upgradeAction(ctx context.Context, cmd *cli.Command) error {
 	clusterName := cmd.String("cluster")
 	skipSnapshot := cmd.Bool("skip-snapshot")
 
+	sess, err := session.Load(clusterName)
+	if err != nil {
+		return fmt.Errorf("loading session: %w", err)
+	}
+
+	cfg, err := infraconfig.Load(sess.GitOpsPath)
+	if err != nil {
+		return fmt.Errorf("loading infrastructure config: %w", err)
+	}
+
 	opts := upgrade.Opts{
 		ClusterName:  clusterName,
 		CLIVersion:   version,
 		SkipSnapshot: skipSnapshot,
 		Log:          zapLogger,
+		InfraConfig:  cfg,
 	}
 
 	apiServerIP, err := apiServerIPForCluster(clusterName)
@@ -85,8 +97,13 @@ func upgradeCiliumCmd() *cli.Command {
 	}
 }
 
-func upgradeCiliumAction(ctx context.Context, cmd *cli.Command, _ *session.Session) error {
+func upgradeCiliumAction(ctx context.Context, cmd *cli.Command, sess *session.Session) error {
 	clusterName := cmd.String("cluster")
+
+	cfg, err := infraconfig.Load(sess.GitOpsPath)
+	if err != nil {
+		return fmt.Errorf("loading infrastructure config: %w", err)
+	}
 
 	apiServerIP, err := apiServerIPForCluster(clusterName)
 	if err != nil {
@@ -98,6 +115,7 @@ func upgradeCiliumAction(ctx context.Context, cmd *cli.Command, _ *session.Sessi
 		CLIVersion:   version,
 		SkipSnapshot: cmd.Bool("skip-snapshot"),
 		Log:          zapLogger,
+		InfraConfig:  cfg,
 	}
 
 	result, err := upgrade.Cilium(ctx, opts, apiServerIP)
@@ -122,14 +140,20 @@ func upgradeArgoCDCmd() *cli.Command {
 	}
 }
 
-func upgradeArgoCDAction(ctx context.Context, cmd *cli.Command, _ *session.Session) error {
+func upgradeArgoCDAction(ctx context.Context, cmd *cli.Command, sess *session.Session) error {
 	clusterName := cmd.String("cluster")
+
+	cfg, err := infraconfig.Load(sess.GitOpsPath)
+	if err != nil {
+		return fmt.Errorf("loading infrastructure config: %w", err)
+	}
 
 	opts := upgrade.Opts{
 		ClusterName:  clusterName,
 		CLIVersion:   version,
 		SkipSnapshot: cmd.Bool("skip-snapshot"),
 		Log:          zapLogger,
+		InfraConfig:  cfg,
 	}
 
 	result, err := upgrade.ArgoCD(ctx, opts)

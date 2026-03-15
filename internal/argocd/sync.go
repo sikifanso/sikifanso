@@ -56,6 +56,9 @@ type SyncOpts struct {
 
 	// SkipUnhealthy skips syncing apps that are currently Degraded.
 	SkipUnhealthy bool
+
+	// Namespace is the ArgoCD namespace. Defaults to "argocd".
+	Namespace string
 }
 
 // SyncWithOpts performs a sync operation based on the provided options.
@@ -69,7 +72,7 @@ func SyncWithOpts(ctx context.Context, log *zap.Logger, opts SyncOpts) error {
 		}
 		return syncAndWait(ctx, log, opts)
 	default:
-		return Sync(ctx, log, opts.ClusterName, opts.ArgoURL)
+		return SyncWithNamespace(ctx, log, opts.ClusterName, opts.ArgoURL, opts.Namespace)
 	}
 }
 
@@ -77,6 +80,11 @@ func SyncWithOpts(ctx context.Context, log *zap.Logger, opts SyncOpts) error {
 // the repo-server cache) and the ApplicationSet controller (to trigger
 // immediate reconciliation).
 func Sync(ctx context.Context, log *zap.Logger, clusterName, argocdURL string) error {
+	return SyncWithNamespace(ctx, log, clusterName, argocdURL, "")
+}
+
+// SyncWithNamespace is like Sync but allows specifying the ArgoCD namespace.
+func SyncWithNamespace(ctx context.Context, log *zap.Logger, clusterName, argocdURL, namespace string) error {
 	// 1. ArgoCD server webhook — invalidates repo-server cache.
 	if err := sendWebhook(ctx, log, argocdURL+"/api/webhook"); err != nil {
 		return fmt.Errorf("argocd server webhook: %w", err)
@@ -84,7 +92,7 @@ func Sync(ctx context.Context, log *zap.Logger, clusterName, argocdURL string) e
 
 	// 2. ApplicationSet controller webhook — triggers reconciliation.
 	//    Reachable only inside the cluster, so we proxy through the API server.
-	if err := sendAppSetWebhook(ctx, log, clusterName); err != nil {
+	if err := sendAppSetWebhook(ctx, log, clusterName, namespace); err != nil {
 		return fmt.Errorf("applicationset webhook: %w", err)
 	}
 
@@ -123,7 +131,7 @@ type pollState struct {
 
 // setupPoll fires webhooks, creates a client, and prepares the polling context.
 func setupPoll(ctx context.Context, log *zap.Logger, opts SyncOpts) (*pollState, error) {
-	if err := Sync(ctx, log, opts.ClusterName, opts.ArgoURL); err != nil {
+	if err := SyncWithNamespace(ctx, log, opts.ClusterName, opts.ArgoURL, opts.Namespace); err != nil {
 		return nil, err
 	}
 
@@ -300,15 +308,20 @@ func sendWebhook(ctx context.Context, log *zap.Logger, url string) error {
 
 // sendAppSetWebhook proxies a webhook through the Kubernetes API server
 // to the ApplicationSet controller service (ClusterIP, port 7000).
-func sendAppSetWebhook(ctx context.Context, log *zap.Logger, clusterName string) error {
+func sendAppSetWebhook(ctx context.Context, log *zap.Logger, clusterName, namespace string) error {
 	cs, err := kube.ClientForCluster(clusterName)
 	if err != nil {
 		return fmt.Errorf("creating clientset: %w", err)
 	}
 
+	ns := namespace
+	if ns == "" {
+		ns = DefaultNamespace
+	}
+
 	log.Info("sending webhook to applicationset controller", zap.String("cluster", clusterName))
 	result := cs.CoreV1().RESTClient().Post().
-		Namespace("argocd").
+		Namespace(ns).
 		Resource("services").
 		Name("argocd-applicationset-controller:http-webhook").
 		SubResource("proxy").

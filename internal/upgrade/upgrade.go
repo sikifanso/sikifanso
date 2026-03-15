@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/alicanalbayrak/sikifanso/internal/helm"
+	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
 	"github.com/alicanalbayrak/sikifanso/internal/snapshot"
 	"go.uber.org/zap"
 )
@@ -26,6 +27,7 @@ type Opts struct {
 	CLIVersion   string
 	SkipSnapshot bool
 	Log          *zap.Logger
+	InfraConfig  *infraconfig.InfraConfig
 }
 
 // preUpgradeSnapshot captures state before upgrade, returns snapshot name.
@@ -42,24 +44,24 @@ func preUpgradeSnapshot(opts Opts, component string) (string, error) {
 }
 
 // upgradeComponent is the generic upgrade flow for a Helm-managed component.
-func upgradeComponent(ctx context.Context, opts Opts, component, namespace, repoURL, chartName, releaseName string, vals map[string]interface{}) (*Result, error) {
+func upgradeComponent(ctx context.Context, opts Opts, component string, chart infraconfig.ChartConfig, vals map[string]interface{}) (*Result, error) {
 	log := opts.Log
 
-	cfg, settings, err := helm.Setup(log, namespace)
+	cfg, settings, err := helm.Setup(log, chart.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("setting up helm for %s: %w", component, err)
 	}
 
-	currentVer, err := helm.CurrentVersion(cfg, releaseName)
+	currentVer, err := helm.CurrentVersion(cfg, chart.ReleaseName)
 	if err != nil {
 		return nil, fmt.Errorf("getting current %s version: %w", component, err)
 	}
 
 	ch, err := helm.LocateChart(cfg, settings, helm.InstallParams{
-		Namespace:   namespace,
-		RepoURL:     repoURL,
-		ChartName:   chartName,
-		ReleaseName: releaseName,
+		Namespace:   chart.Namespace,
+		RepoURL:     chart.RepoURL,
+		ChartName:   chart.Chart,
+		ReleaseName: chart.ReleaseName,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("locating latest %s chart: %w", component, err)
@@ -88,17 +90,17 @@ func upgradeComponent(ctx context.Context, opts Opts, component, namespace, repo
 	)
 
 	upgradeErr := helm.Upgrade(ctx, cfg, ch, vals, helm.UpgradeParams{
-		Namespace:     namespace,
-		ReleaseName:   releaseName,
-		RepoURL:       repoURL,
-		ChartName:     chartName,
+		Namespace:     chart.Namespace,
+		ReleaseName:   chart.ReleaseName,
+		RepoURL:       chart.RepoURL,
+		ChartName:     chart.Chart,
 		Timeout:       10 * time.Minute,
 		SpinnerSuffix: fmt.Sprintf(" Upgrading %s %s -> %s", component, currentVer, newVer),
 	})
 
 	if upgradeErr != nil {
 		log.Error("upgrade failed, rolling back", zap.String("component", component), zap.Error(upgradeErr))
-		if rbErr := helm.Rollback(cfg, releaseName); rbErr != nil {
+		if rbErr := helm.Rollback(cfg, chart.ReleaseName); rbErr != nil {
 			log.Error("rollback also failed", zap.Error(rbErr))
 		}
 		if snapshotName != "" {

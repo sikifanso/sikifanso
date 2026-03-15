@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/alicanalbayrak/sikifanso/internal/catalog"
+	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
 	"github.com/alicanalbayrak/sikifanso/internal/kube"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
 	corev1 "k8s.io/api/core/v1"
@@ -106,6 +107,12 @@ func Gather(ctx context.Context, clusterName string) (*ClusterData, error) {
 		return data, nil
 	}
 
+	cfg, cfgErr := infraconfig.Load(sess.GitOpsPath)
+	argoNS := "argocd"
+	if cfgErr == nil {
+		argoNS = cfg.ArgoCD.Namespace
+	}
+
 	for _, e := range entries {
 		as := AppStatus{
 			Name:      e.Name,
@@ -115,7 +122,7 @@ func Gather(ctx context.Context, clusterName string) (*ClusterData, error) {
 		}
 
 		if e.Enabled {
-			health, sync := queryAppStatus(ctx, dynClient, e.Name)
+			health, sync := queryAppStatus(ctx, dynClient, e.Name, argoNS)
 			as.Health = health
 			as.SyncStatus = sync
 		}
@@ -126,8 +133,8 @@ func Gather(ctx context.Context, clusterName string) (*ClusterData, error) {
 	return data, nil
 }
 
-func queryAppStatus(ctx context.Context, dynClient dynamic.Interface, appName string) (health, syncStatus string) {
-	app, err := dynClient.Resource(applicationGVR).Namespace("argocd").Get(ctx, appName, metav1.GetOptions{})
+func queryAppStatus(ctx context.Context, dynClient dynamic.Interface, appName, namespace string) (health, syncStatus string) {
+	app, err := dynClient.Resource(applicationGVR).Namespace(namespace).Get(ctx, appName, metav1.GetOptions{})
 	if err != nil {
 		return "Missing", "Unknown"
 	}

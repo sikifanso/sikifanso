@@ -3,6 +3,7 @@ package doctor
 import (
 	"context"
 
+	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/dynamic"
@@ -39,18 +40,19 @@ func InfraChecks() []Check {
 }
 
 // ClusterChecks returns checks that need a typed Kubernetes clientset.
-func ClusterChecks(cs *kubernetes.Clientset) []Check {
+// Namespaces are read from the provided InfraConfig.
+func ClusterChecks(cs *kubernetes.Clientset, cfg *infraconfig.InfraConfig) []Check {
 	return []Check{
 		NodesCheck{Client: cs},
-		CiliumCheck{Client: cs},
-		HubbleCheck{Client: cs},
-		ArgoCDCheck{Client: cs},
+		CiliumCheck{Client: cs, Namespace: cfg.Cilium.Namespace},
+		HubbleCheck{Client: cs, Namespace: cfg.Cilium.Namespace},
+		ArgoCDCheck{Client: cs, Namespace: cfg.ArgoCD.Namespace},
 	}
 }
 
 // AppChecks returns checks for enabled catalog apps.
-func AppChecks(dynClient dynamic.Interface, gitOpsPath string) []Check {
-	return []Check{AppsCheck{DynClient: dynClient, GitOpsPath: gitOpsPath}}
+func AppChecks(dynClient dynamic.Interface, gitOpsPath string, cfg *infraconfig.InfraConfig) []Check {
+	return []Check{AppsCheck{DynClient: dynClient, GitOpsPath: gitOpsPath, ArgoCDNamespace: cfg.ArgoCD.Namespace}}
 }
 
 // deploymentAvailable returns true if the Deployment has the Available

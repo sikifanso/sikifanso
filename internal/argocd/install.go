@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alicanalbayrak/sikifanso/internal/helm"
+	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
 	"github.com/briandowns/spinner"
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
@@ -22,20 +23,9 @@ type InstallResult struct {
 }
 
 const (
-	namespace    = "argocd"
 	readyTimeout = 3 * time.Minute
 	pollInterval = 5 * time.Second
 )
-
-var helmParams = helm.InstallParams{
-	Namespace:     namespace,
-	RepoURL:       "https://argoproj.github.io/argo-helm",
-	ChartName:     "argo-cd",
-	ReleaseName:   "argocd",
-	Timeout:       5 * time.Minute,
-	CreateNS:      true,
-	SpinnerSuffix: " Deploying ArgoCD to argocd namespace (this may take a few minutes)...",
-}
 
 // deploymentNames lists the ArgoCD deployments that must be Available
 // before we consider the install complete.
@@ -46,35 +36,45 @@ var deploymentNames = []string{
 }
 
 // Install deploys ArgoCD into the cluster using the Helm Go SDK.
-// It returns an InstallResult with chart version and admin password.
-func Install(ctx context.Context, log *zap.Logger) (*InstallResult, error) {
-	vals := Values()
+// Chart coordinates and pre-merged values are provided by the caller
+// via the InfraConfig. It returns an InstallResult with chart version
+// and admin password.
+func Install(ctx context.Context, log *zap.Logger, chart infraconfig.ChartConfig, vals map[string]interface{}) (*InstallResult, error) {
+	params := helm.InstallParams{
+		Namespace:     chart.Namespace,
+		RepoURL:       chart.RepoURL,
+		ChartName:     chart.Chart,
+		ReleaseName:   chart.ReleaseName,
+		Timeout:       5 * time.Minute,
+		CreateNS:      true,
+		SpinnerSuffix: fmt.Sprintf(" Deploying ArgoCD to %s namespace (this may take a few minutes)...", chart.Namespace),
+	}
 
-	cfg, settings, err := helm.Setup(log, namespace)
+	cfg, settings, err := helm.Setup(log, chart.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("helm setup: %w", err)
 	}
 
-	log.Info("downloading argocd chart", zap.String("repo", helmParams.RepoURL))
-	ch, err := helm.LocateChart(cfg, settings, helmParams)
+	log.Info("downloading argocd chart", zap.String("repo", params.RepoURL))
+	ch, err := helm.LocateChart(cfg, settings, params)
 	if err != nil {
 		return nil, fmt.Errorf("locating argocd chart: %w", err)
 	}
 	log.Info("chart downloaded", zap.String("version", ch.Metadata.Version))
 
-	if err := helm.Deploy(ctx, cfg, ch, vals, helmParams); err != nil {
+	if err := helm.Deploy(ctx, cfg, ch, vals, params); err != nil {
 		return nil, fmt.Errorf("helm install argocd: %w", err)
 	}
 	log.Info("argocd helm release deployed")
 
-	if err := waitForDeployments(ctx); err != nil {
+	if err := waitForDeployments(ctx, chart.Namespace); err != nil {
 		return nil, fmt.Errorf("waiting for argocd deployments: %w", err)
 	}
 	log.Info("argocd deployments are ready")
 
 	result := &InstallResult{ChartVersion: ch.Metadata.Version}
 
-	password, err := extractAdminPassword(ctx)
+	password, err := extractAdminPassword(ctx, chart.Namespace)
 	if err != nil {
 		log.Warn("could not extract admin password", zap.Error(err))
 	} else {
@@ -87,7 +87,7 @@ func Install(ctx context.Context, log *zap.Logger) (*InstallResult, error) {
 
 // waitForDeployments polls the key ArgoCD deployments until they all
 // report the Available condition, or the timeout expires.
-func waitForDeployments(ctx context.Context) error {
+func waitForDeployments(ctx context.Context, namespace string) error {
 	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
 	if err != nil {
 		return fmt.Errorf("building kubeconfig: %w", err)
@@ -146,7 +146,7 @@ func deploymentAvailable(dep *appsv1.Deployment) bool {
 // extractAdminPassword reads the initial admin password from the
 // argocd-initial-admin-secret Secret. client-go returns already-decoded
 // bytes from secret.Data, so no base64 decoding is needed.
-func extractAdminPassword(ctx context.Context) (string, error) {
+func extractAdminPassword(ctx context.Context, namespace string) (string, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
 	if err != nil {
 		return "", fmt.Errorf("building kubeconfig: %w", err)
@@ -168,4 +168,3 @@ func extractAdminPassword(ctx context.Context) (string, error) {
 	}
 	return string(password), nil
 }
-

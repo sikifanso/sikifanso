@@ -3,18 +3,14 @@ package upgrade
 import (
 	"context"
 
-	"github.com/alicanalbayrak/sikifanso/internal/cilium"
-)
-
-const (
-	ciliumRepoURL     = "https://helm.cilium.io/"
-	ciliumChartName   = "cilium"
-	ciliumReleaseName = "cilium"
-	ciliumNamespace   = "kube-system"
+	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
 )
 
 // Cilium upgrades the Cilium CNI.
 func Cilium(ctx context.Context, opts Opts, apiServerIP string) (*Result, error) {
-	vals := cilium.Values(apiServerIP)
-	return upgradeComponent(ctx, opts, "Cilium", ciliumNamespace, ciliumRepoURL, ciliumChartName, ciliumReleaseName, vals)
+	cfg := opts.InfraConfig
+	vals := infraconfig.MergeValues(cfg.CiliumValues,
+		infraconfig.CiliumRuntimeOverrides(cfg.Platform.NodePorts, apiServerIP))
+
+	return upgradeComponent(ctx, opts, "Cilium", cfg.Cilium, vals)
 }
