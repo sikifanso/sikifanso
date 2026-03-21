@@ -46,10 +46,12 @@ func Scaffold(ctx context.Context, log *zap.Logger, targetDir string, opts Scaff
 		return fmt.Errorf("cloning bootstrap repo: %w", err)
 	}
 
-	// Ensure app directories exist (custom bootstrap repos may omit them).
+	// Ensure app and agent directories exist (custom bootstrap repos may omit them).
 	for _, sub := range []string{
 		filepath.Join("apps", "coordinates"),
 		filepath.Join("apps", "values"),
+		"agents",
+		filepath.Join("agents", "values"),
 	} {
 		if err := os.MkdirAll(filepath.Join(targetDir, sub), 0755); err != nil {
 			return fmt.Errorf("creating %s directory: %w", sub, err)

@@ -50,9 +50,12 @@ func ClusterChecks(cs *kubernetes.Clientset, cfg *infraconfig.InfraConfig) []Che
 	}
 }
 
-// AppChecks returns checks for enabled catalog apps.
+// AppChecks returns checks for enabled catalog apps and agent namespaces.
 func AppChecks(dynClient dynamic.Interface, gitOpsPath string, cfg *infraconfig.InfraConfig) []Check {
-	return []Check{AppsCheck{DynClient: dynClient, GitOpsPath: gitOpsPath, ArgoCDNamespace: cfg.ArgoCD.Namespace}}
+	return []Check{
+		AppsCheck{DynClient: dynClient, GitOpsPath: gitOpsPath, ArgoCDNamespace: cfg.ArgoCD.Namespace},
+		AgentsCheck{DynClient: dynClient, GitOpsPath: gitOpsPath, ArgoCDNamespace: cfg.ArgoCD.Namespace},
+	}
 }
 
 // deploymentAvailable returns true if the Deployment has the Available

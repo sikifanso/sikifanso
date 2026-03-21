@@ -24,6 +24,7 @@ import (
 var bootstrapManifests = []string{
 	"bootstrap/root-app.yaml",
 	"bootstrap/root-catalog.yaml",
+	"bootstrap/root-agents.yaml",
 }
 
 // ApplyRootApp reads the bootstrap ApplicationSet manifests from the gitops
