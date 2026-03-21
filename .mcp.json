@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "sikifanso": {
+      "command": "/Users/alicanalbayrak/dev/sikifanso/sikifanso/sikifanso",
+      "args": ["mcp", "serve", "--log-level", "error"]
+    }
+  }
+}

@@ -15,6 +15,9 @@ vendor/
 site/
 .venv/
 
+# IDE
+.idea/
+
 # Ignore agent settings
 .claude/
 PLAN.md
