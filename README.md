@@ -16,7 +16,7 @@
 </p>
 
 
-A CLI tool that bootstraps a fully functional homelab Kubernetes cluster with a single command. Spins up a [k3d](https://k3d.io) cluster pre-configured with [Cilium](https://cilium.io) (eBPF networking, ingress, Hubble observability) and [ArgoCD](https://argoproj.github.io/cd/) (GitOps from a local git repository).
+A CLI tool that bootstraps Kubernetes clusters purpose-built for running AI agents safely. Spins up a [k3d](https://k3d.io) cluster pre-configured with [Cilium](https://cilium.io) (eBPF networking, agent isolation), [ArgoCD](https://argoproj.github.io/cd/) (GitOps), and a curated catalog of AI agent infrastructure tools.
 
 ## What you get
 
@@ -24,11 +24,21 @@ A CLI tool that bootstraps a fully functional homelab Kubernetes cluster with a 
 sikifanso cluster create
 ```
 
-- **k3d cluster** — 1 server + 2 agents, k3s v1.29
-- **Cilium** — full kube-proxy replacement, ingress controller, Hubble UI
-- **ArgoCD** — configured to read from a local gitops repo on your filesystem
-- **GitOps repo** — scaffolded from a bootstrap template, mounted into the cluster
-- **Root ApplicationSets** — one watches `apps/coordinates/*.yaml` for custom apps, another watches `catalog/*.yaml` for curated catalog apps
+- **k3d cluster** -- 1 server + 2 agents, k3s v1.29
+- **Cilium** -- full kube-proxy replacement, ingress controller, Hubble UI, network isolation for agents
+- **ArgoCD** -- configured to read from a local gitops repo on your filesystem
+- **GitOps repo** -- scaffolded from a bootstrap template, mounted into the cluster
+- **AI Agent Infrastructure Catalog** -- 17 curated tools across 7 categories:
+
+| Category | Tools | Purpose |
+|----------|-------|---------|
+| **Gateway** | LiteLLM Proxy | LLM API routing, cost tracking, rate limiting |
+| **Observability** | Langfuse, Prometheus+Grafana, Loki, Tempo | LLM tracing, metrics, logs, distributed tracing |
+| **Guardrails** | Guardrails AI, NeMo Guardrails, Presidio | Output validation, safety rails, PII redaction |
+| **RAG** | Qdrant, Text Embeddings Inference, Unstructured | Vector DB, embeddings, document parsing |
+| **Runtime** | Temporal, External Secrets, OPA | Workflow orchestration, secrets, policy engine |
+| **Models** | Ollama | Local LLM inference |
+| **Storage** | PostgreSQL, Valkey (Redis) | Supporting data stores |
 
 ## Prerequisites
 
@@ -59,39 +69,54 @@ go build -o sikifanso ./cmd/sikifanso
 ## Quick start
 
 ```bash
-# Create a cluster (interactive prompts for name and bootstrap repo)
+# Create a cluster
 sikifanso cluster create
 
-# Or with explicit flags
-sikifanso cluster create --name mylab --bootstrap https://github.com/sikifanso/sikifanso-homelab-bootstrap.git
+# Browse the AI infra catalog
+sikifanso catalog list
+
+# Enable an LLM gateway
+sikifanso catalog enable litellm-proxy
+
+# Enable LLM tracing
+sikifanso catalog enable langfuse
+
+# Enable a vector database for RAG
+sikifanso catalog enable qdrant
+
+# Enable local model inference
+sikifanso catalog enable ollama
+
+# Check everything is healthy
+sikifanso doctor
 ```
 
 After creation you'll see:
 
 ```
-╭──────────────────────────────────────────╮
-│           Cluster: default               │
-├──────────────────────────────────────────┤
-│ State:           running                 │
-│                                          │
-│ ArgoCD URL:      http://localhost:30080  │
-│ ArgoCD User:     admin                   │
-│ ArgoCD Password: ••••••••                │
-│                                          │
-│ Hubble URL:      http://localhost:30081  │
-│                                          │
-│ GitOps Path:     ~/.sikifanso/clusters/… │
-╰──────────────────────────────────────────╯
++------------------------------------------+
+|           Cluster: default               |
++------------------------------------------+
+| State:           running                 |
+|                                          |
+| ArgoCD URL:      http://localhost:30080  |
+| ArgoCD User:     admin                   |
+| ArgoCD Password: ********               |
+|                                          |
+| Hubble URL:      http://localhost:30081  |
+|                                          |
+| GitOps Path:     ~/.sikifanso/clusters/  |
++------------------------------------------+
 ```
 
-## Deploying apps
+## Deploying AI infra tools
 
 ### From the catalog
 
-The bootstrap repo ships with a curated catalog of 20+ apps. Enable one with a single command:
+The bootstrap repo ships with a curated catalog of AI agent infrastructure tools. Enable one with a single command:
 
 ```bash
-sikifanso catalog enable prometheus-stack
+sikifanso catalog enable litellm-proxy
 ```
 
 This sets `enabled: true` in the catalog entry, commits the change, and triggers an ArgoCD sync.
@@ -101,7 +126,7 @@ This sets `enabled: true` in the catalog entry, commits the change, and triggers
 sikifanso catalog list
 
 # Disable a catalog app
-sikifanso catalog disable prometheus-stack
+sikifanso catalog disable litellm-proxy
 ```
 
 ### Custom Helm charts
@@ -127,8 +152,9 @@ sikifanso app list
 
 ```
 NAME                 CHART                  VERSION    NAMESPACE    SOURCE
-podinfo              podinfo                6.10.1     podinfo      custom
-prometheus-stack     kube-prometheus-stack   82.4.3   monitoring   catalog
+litellm-proxy        litellm                0.2.1      gateway      catalog
+langfuse             langfuse               1.2.14     observability catalog
+qdrant               qdrant                 0.13.2     rag          catalog
 ```
 
 Remove a custom app with `app remove`:
@@ -137,7 +163,7 @@ Remove a custom app with `app remove`:
 sikifanso app remove podinfo
 ```
 
-You can also create the files manually under `apps/coordinates/` and `apps/values/` if you prefer — see [Architecture](docs/architecture.md) for the file format.
+You can also create the files manually under `apps/coordinates/` and `apps/values/` if you prefer -- see [Architecture](docs/architecture.md) for the file format.
 
 ## CLI reference
 
@@ -192,9 +218,11 @@ ok  k3d cluster         3/3 nodes ready
 ok  Cilium              DaemonSet 3/3 ready
 ok  Hubble              relay deployment ready
 ok  ArgoCD              3/3 deployments ready
-!!  App: grafana         Degraded -- Synced
-                         -> Deployment grafana in namespace monitoring: replicas unavailable
-                         -> Try: sikifanso catalog disable grafana
+ok  App: litellm-proxy  Healthy -- Synced
+ok  App: langfuse       Healthy -- Synced
+!!  App: qdrant          Degraded -- Synced
+                         -> StatefulSet qdrant in namespace rag: replicas unavailable
+                         -> Try: sikifanso catalog disable qdrant
 ```
 
 Each failure includes the root cause and a suggested fix command.
@@ -235,29 +263,29 @@ sikifanso argocd sync --cluster lab2
 sikifanso cluster info
 ```
 
-Ports are auto-resolved — if defaults (30080, 30081, etc.) are taken by the first cluster, the next one gets free ports automatically.
+Ports are auto-resolved -- if defaults (30080, 30081, etc.) are taken by the first cluster, the next one gets free ports automatically.
 
 ## Architecture
 
 ```
 ~/.sikifanso/clusters/<name>/
-├── session.yaml              # Cluster metadata, credentials, ports
-└── gitops/                   # Local git repo (mounted into cluster)
-    ├── bootstrap/
-    │   ├── root-app.yaml     # ApplicationSet for custom apps
-    │   └── root-catalog.yaml # ApplicationSet for catalog apps
-    ├── apps/                 # Custom user-supplied Helm apps
-    │   ├── coordinates/
-    │   │   └── <app>.yaml    # Helm chart coordinates (repo, chart, version, namespace)
-    │   └── values/
-    │       └── <app>.yaml    # Helm values overrides
-    └── catalog/              # Pre-curated catalog apps
-        ├── <app>.yaml        # App definition with enabled flag
-        └── values/
-            └── <app>.yaml    # Helm values overrides
++-- session.yaml              # Cluster metadata, credentials, ports
++-- gitops/                   # Local git repo (mounted into cluster)
+    +-- bootstrap/
+    |   +-- root-app.yaml     # ApplicationSet for custom apps
+    |   +-- root-catalog.yaml # ApplicationSet for catalog apps
+    +-- apps/                 # Custom user-supplied Helm apps
+    |   +-- coordinates/
+    |   |   +-- <app>.yaml    # Helm chart coordinates (repo, chart, version, namespace)
+    |   +-- values/
+    |       +-- <app>.yaml    # Helm values overrides
+    +-- catalog/              # AI agent infrastructure catalog
+        +-- <app>.yaml        # App definition with enabled flag
+        +-- values/
+            +-- <app>.yaml    # Helm values overrides
 ```
 
-The gitops directory is mounted into the k3d cluster at `/local-gitops` via a hostPath volume. ArgoCD's repo-server reads from it directly — no remote git server needed.
+The gitops directory is mounted into the k3d cluster at `/local-gitops` via a hostPath volume. ArgoCD's repo-server reads from it directly -- no remote git server needed.
 
 Two root ApplicationSets manage the dual-track app model:
 
@@ -268,8 +296,8 @@ Two root ApplicationSets manage the dual-track app model:
 
 ArgoCD's default reconciliation interval is 180 seconds. The sync command bypasses this by sending a webhook push event (mimicking a GitHub push notification) to two endpoints:
 
-1. **ArgoCD server** — invalidates the repo-server's git revision cache
-2. **ApplicationSet controller** — triggers immediate re-evaluation of the git generator
+1. **ArgoCD server** -- invalidates the repo-server's git revision cache
+2. **ApplicationSet controller** -- triggers immediate re-evaluation of the git generator
 
 The ApplicationSet controller webhook is reached via the Kubernetes API server proxy (no extra ports exposed).
 

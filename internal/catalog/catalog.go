@@ -61,7 +61,12 @@ func List(gitOpsPath string) ([]Entry, error) {
 		apps = append(apps, entry)
 	}
 
-	sort.Slice(apps, func(i, j int) bool { return apps[i].Name < apps[j].Name })
+	sort.Slice(apps, func(i, j int) bool {
+		if apps[i].Category != apps[j].Category {
+			return apps[i].Category < apps[j].Category
+		}
+		return apps[i].Name < apps[j].Name
+	})
 
 	return apps, nil
 }

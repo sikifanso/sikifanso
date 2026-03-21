@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strings"
 
+	"github.com/alicanalbayrak/sikifanso/internal/argocd"
 	"github.com/alicanalbayrak/sikifanso/internal/cluster"
 	"github.com/alicanalbayrak/sikifanso/internal/gitops"
 	"github.com/alicanalbayrak/sikifanso/internal/preflight"
+	"github.com/alicanalbayrak/sikifanso/internal/profile"
 	"github.com/alicanalbayrak/sikifanso/internal/prompt"
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
@@ -30,6 +34,10 @@ func clusterCreateCmd() *cli.Command {
 			&cli.StringFlag{
 				Name:  "bootstrap-version",
 				Usage: "Bootstrap repo tag to clone (default: match CLI version; empty string forces HEAD)",
+			},
+			&cli.StringFlag{
+				Name:  "profile",
+				Usage: "Enable a predefined set of catalog apps (e.g. agent-dev, agent-safe, rag; comma-separated for composition)",
 			},
 		},
 		Action: clusterCreateAction,
@@ -55,6 +63,17 @@ func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
 		cmd.IsSet("bootstrap-version"),
 	)
 
+	// Validate profile before creating the cluster — fail fast on typos.
+	profileStr := cmd.String("profile")
+	var profileApps []string
+	if profileStr != "" {
+		var err error
+		profileApps, err = profile.Resolve(profileStr)
+		if err != nil {
+			return err
+		}
+	}
+
 	zapLogger.Info("running preflight checks")
 	if err := preflight.CheckDocker(ctx); err != nil {
 		zapLogger.Error("preflight check failed", zap.Error(err))
@@ -69,6 +88,18 @@ func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		zapLogger.Error("cluster creation failed", zap.Error(err))
 		return err
+	}
+
+	// Apply profile after cluster creation — enables catalog apps and commits.
+	if len(profileApps) > 0 {
+		zapLogger.Info("applying profile", zap.String("profile", profileStr), zap.Strings("apps", profileApps))
+		if err := profile.Apply(sess.GitOpsPath, profileStr, profileApps, func(msg string) {
+			zapLogger.Warn(msg)
+		}); err != nil {
+			return fmt.Errorf("applying profile: %w", err)
+		}
+		// Trigger ArgoCD sync so enabled apps deploy immediately.
+		argocd.SyncAndReport(ctx, zapLogger, os.Stderr, syncOptsFromSession(sess))
 	}
 
 	printClusterInfo(sess)

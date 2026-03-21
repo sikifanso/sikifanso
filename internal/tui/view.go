@@ -12,7 +12,7 @@ func (m model) View() string {
 
 	var b strings.Builder
 
-	b.WriteString(titleStyle.Render("App Catalog"))
+	b.WriteString(titleStyle.Render("AI Agent Infrastructure Catalog"))
 	b.WriteString("\n")
 
 	// Search bar.
