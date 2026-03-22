@@ -52,8 +52,8 @@ func registerClusterTools(s *mcp.Server, deps *Deps) {
 		var sb strings.Builder
 		sb.WriteString("Clusters:\n")
 		for _, sess := range sessions {
-			sb.WriteString(fmt.Sprintf("  - %s (state: %s, created: %s)\n",
-				sess.ClusterName, sess.State, sess.CreatedAt.Format("2006-01-02 15:04")))
+			fmt.Fprintf(&sb, "  - %s (state: %s, created: %s)\n",
+				sess.ClusterName, sess.State, sess.CreatedAt.Format("2006-01-02 15:04"))
 		}
 		return textResult(sb.String())
 	})
@@ -67,14 +67,14 @@ func registerClusterTools(s *mcp.Server, deps *Deps) {
 			return r, s, e
 		}
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("Cluster: %s\n", sess.ClusterName))
-		sb.WriteString(fmt.Sprintf("State: %s\n", sess.State))
-		sb.WriteString(fmt.Sprintf("Created: %s\n", sess.CreatedAt.Format("2006-01-02 15:04:05")))
-		sb.WriteString(fmt.Sprintf("GitOps Path: %s\n", sess.GitOpsPath))
-		sb.WriteString(fmt.Sprintf("Bootstrap: %s @ %s\n", sess.BootstrapURL, sess.BootstrapVersion))
-		sb.WriteString(fmt.Sprintf("K3d Image: %s\n", sess.K3dConfig.Image))
-		sb.WriteString(fmt.Sprintf("K3d Servers: %d, Agents: %d\n", sess.K3dConfig.Servers, sess.K3dConfig.Agents))
-		sb.WriteString(fmt.Sprintf("ArgoCD URL: %s\n", sess.Services.ArgoCD.URL))
+		fmt.Fprintf(&sb, "Cluster: %s\n", sess.ClusterName)
+		fmt.Fprintf(&sb, "State: %s\n", sess.State)
+		fmt.Fprintf(&sb, "Created: %s\n", sess.CreatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(&sb, "GitOps Path: %s\n", sess.GitOpsPath)
+		fmt.Fprintf(&sb, "Bootstrap: %s @ %s\n", sess.BootstrapURL, sess.BootstrapVersion)
+		fmt.Fprintf(&sb, "K3d Image: %s\n", sess.K3dConfig.Image)
+		fmt.Fprintf(&sb, "K3d Servers: %d, Agents: %d\n", sess.K3dConfig.Servers, sess.K3dConfig.Agents)
+		fmt.Fprintf(&sb, "ArgoCD URL: %s\n", sess.Services.ArgoCD.URL)
 		return textResult(sb.String())
 	})
 

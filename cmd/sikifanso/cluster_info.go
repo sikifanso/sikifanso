@@ -31,6 +31,12 @@ func clusterInfoAction(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return fmt.Errorf("listing sessions: %w", err)
 	}
+	if sessions == nil {
+		sessions = []*session.Session{}
+	}
+	if outputJSON(cmd, sessions) {
+		return nil
+	}
 	if len(sessions) == 0 {
 		_, _ = fmt.Fprintln(cmd.Root().Writer, "no clusters found — create one with: sikifanso cluster create")
 		return nil
@@ -53,6 +59,9 @@ func showClusterInfo(ctx context.Context, cmd *cli.Command, name string) error {
 	if err != nil {
 		zapLogger.Error("failed to load session", zap.String("cluster", name), zap.Error(err))
 		return fmt.Errorf("no session found for cluster %q — was it created with sikifanso?", name)
+	}
+	if outputJSON(cmd, sess) {
+		return nil
 	}
 
 	live, err := cluster.Exists(ctx, name)

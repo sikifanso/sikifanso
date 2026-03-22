@@ -23,7 +23,7 @@ type argocdAppsInput struct {
 	Cluster string `json:"cluster" jsonschema:"Name of the cluster"`
 }
 
-func registerDoctorTools(s *mcp.Server, deps *Deps) {
+func registerDoctorTools(s *mcp.Server, _ *Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "doctor",
 		Description: "Run health checks on the cluster (Docker, nodes, Cilium, ArgoCD, apps, agents)",
@@ -103,8 +103,8 @@ func registerDoctorTools(s *mcp.Server, deps *Deps) {
 		var sb strings.Builder
 		sb.WriteString("ArgoCD Applications:\n")
 		for _, app := range apps {
-			sb.WriteString(fmt.Sprintf("  - %-25s sync:%-10s health:%s\n",
-				app.Name, app.SyncStatus, app.Health))
+			fmt.Fprintf(&sb, "  - %-25s sync:%-10s health:%s\n",
+				app.Name, app.SyncStatus, app.Health)
 		}
 		return textResult(sb.String())
 	})
@@ -115,18 +115,18 @@ func formatDoctorResults(results []doctor.Result) string {
 	sb.WriteString("Health Check Results:\n")
 	for _, r := range results {
 		if r.OK {
-			sb.WriteString(fmt.Sprintf("  [OK] %-20s %s\n", r.Name, r.Message))
+			fmt.Fprintf(&sb, "  [OK] %-20s %s\n", r.Name, r.Message)
 		} else {
 			msg := r.Cause
 			if r.Message != "" {
 				msg = r.Message
 			}
-			sb.WriteString(fmt.Sprintf("  [!!] %-20s %s\n", r.Name, msg))
+			fmt.Fprintf(&sb, "  [!!] %-20s %s\n", r.Name, msg)
 			if r.Cause != "" && r.Message != "" {
-				sb.WriteString(fmt.Sprintf("       -> %s\n", r.Cause))
+				fmt.Fprintf(&sb, "       -> %s\n", r.Cause)
 			}
 			if r.Fix != "" {
-				sb.WriteString(fmt.Sprintf("       -> Try: %s\n", r.Fix))
+				fmt.Fprintf(&sb, "       -> Try: %s\n", r.Fix)
 			}
 		}
 	}

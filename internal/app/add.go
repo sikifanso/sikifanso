@@ -60,20 +60,20 @@ func Add(opts AddOpts) error {
 		return fmt.Errorf("marshaling coordinates: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(absCoord), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(absCoord), 0o755); err != nil {
 		return fmt.Errorf("creating coordinates directory: %w", err)
 	}
-	if err := os.WriteFile(absCoord, coordData, 0644); err != nil {
+	if err := os.WriteFile(absCoord, coordData, 0o644); err != nil {
 		return fmt.Errorf("writing coordinates file: %w", err)
 	}
 
 	valuesPath := filepath.Join("apps", "values", opts.Name+".yaml")
 	absValues := filepath.Join(opts.GitOpsPath, valuesPath)
 
-	if err := os.MkdirAll(filepath.Dir(absValues), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(absValues), 0o755); err != nil {
 		return fmt.Errorf("creating values directory: %w", err)
 	}
-	if err := os.WriteFile(absValues, []byte("# Helm values for "+opts.Name+"\n"), 0644); err != nil {
+	if err := os.WriteFile(absValues, []byte("# Helm values for "+opts.Name+"\n"), 0o644); err != nil {
 		return fmt.Errorf("writing values file: %w", err)
 	}
 

@@ -58,11 +58,11 @@ func registerKubeTools(s *mcp.Server, _ *Deps) {
 		}
 
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("Pods in %s:\n", input.Namespace))
+		fmt.Fprintf(&sb, "Pods in %s:\n", input.Namespace)
 		for _, pod := range pods.Items {
 			ready := podReadyCount(&pod)
-			sb.WriteString(fmt.Sprintf("  - %-50s %s (%s)\n",
-				pod.Name, string(pod.Status.Phase), ready))
+			fmt.Fprintf(&sb, "  - %-50s %s (%s)\n",
+				pod.Name, string(pod.Status.Phase), ready)
 		}
 		return textResult(sb.String())
 	})
@@ -85,11 +85,11 @@ func registerKubeTools(s *mcp.Server, _ *Deps) {
 		}
 
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("Services in %s:\n", input.Namespace))
+		fmt.Fprintf(&sb, "Services in %s:\n", input.Namespace)
 		for _, svc := range svcs.Items {
 			ports := formatPorts(svc.Spec.Ports)
-			sb.WriteString(fmt.Sprintf("  - %-40s %s  %s\n",
-				svc.Name, string(svc.Spec.Type), ports))
+			fmt.Fprintf(&sb, "  - %-40s %s  %s\n",
+				svc.Name, string(svc.Spec.Type), ports)
 		}
 		return textResult(sb.String())
 	})
@@ -149,13 +149,13 @@ func registerKubeTools(s *mcp.Server, _ *Deps) {
 		}
 
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("Events in %s (last %d):\n", input.Namespace, len(events.Items)))
+		fmt.Fprintf(&sb, "Events in %s (last %d):\n", input.Namespace, len(events.Items))
 		for _, ev := range events.Items {
-			sb.WriteString(fmt.Sprintf("  %s  %-8s  %-20s  %s\n",
+			fmt.Fprintf(&sb, "  %s  %-8s  %-20s  %s\n",
 				ev.LastTimestamp.Format("15:04:05"),
 				ev.Type,
 				ev.InvolvedObject.Name,
-				ev.Message))
+				ev.Message)
 		}
 		return textResult(sb.String())
 	})

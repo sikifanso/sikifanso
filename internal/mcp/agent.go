@@ -50,8 +50,8 @@ func registerAgentTools(s *mcp.Server, deps *Deps) {
 		var sb strings.Builder
 		sb.WriteString("Agents:\n")
 		for _, a := range agents {
-			sb.WriteString(fmt.Sprintf("  - %s (namespace: %s, cpu: %s, memory: %s, pods: %s)\n",
-				a.Name, a.Namespace, a.CPU, a.Memory, a.Pods))
+			fmt.Fprintf(&sb, "  - %s (namespace: %s, cpu: %s, memory: %s, pods: %s)\n",
+				a.Name, a.Namespace, a.CPU, a.Memory, a.Pods)
 		}
 		return textResult(sb.String())
 	})
@@ -69,11 +69,11 @@ func registerAgentTools(s *mcp.Server, deps *Deps) {
 			return errResult(err)
 		}
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("Agent: %s\n", info.Name))
-		sb.WriteString(fmt.Sprintf("Namespace: %s\n", info.Namespace))
-		sb.WriteString(fmt.Sprintf("CPU Quota: %s\n", info.CPU))
-		sb.WriteString(fmt.Sprintf("Memory Quota: %s\n", info.Memory))
-		sb.WriteString(fmt.Sprintf("Max Pods: %s\n", info.Pods))
+		fmt.Fprintf(&sb, "Agent: %s\n", info.Name)
+		fmt.Fprintf(&sb, "Namespace: %s\n", info.Namespace)
+		fmt.Fprintf(&sb, "CPU Quota: %s\n", info.CPU)
+		fmt.Fprintf(&sb, "Memory Quota: %s\n", info.Memory)
+		fmt.Fprintf(&sb, "Max Pods: %s\n", info.Pods)
 		return textResult(sb.String())
 	})
 

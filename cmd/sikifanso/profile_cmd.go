@@ -25,8 +25,11 @@ func profileListCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "list",
 		Usage: "List available cluster profiles",
-		Action: func(_ context.Context, _ *cli.Command) error {
+		Action: func(_ context.Context, cmd *cli.Command) error {
 			profiles := profile.List()
+			if outputJSON(cmd, profiles) {
+				return nil
+			}
 
 			bold := color.New(color.Bold).SprintFunc()
 			dim := color.New(color.FgHiBlack).SprintFunc()

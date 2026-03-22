@@ -67,10 +67,10 @@ func (c AppsCheck) checkApp(ctx context.Context, entry catalog.Entry) Result {
 	status, ok := app.Object["status"].(map[string]interface{})
 	if !ok {
 		return Result{
-			Name:    name,
-			OK:      false,
-			Cause:   "no status found on Application",
-			Fix:     "sikifanso argocd sync",
+			Name:  name,
+			OK:    false,
+			Cause: "no status found on Application",
+			Fix:   "sikifanso argocd sync",
 		}
 	}
 

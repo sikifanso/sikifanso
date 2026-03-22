@@ -53,10 +53,16 @@ func snapshotListCmd() *cli.Command {
 	}
 }
 
-func snapshotListAction(_ context.Context, _ *cli.Command) error {
+func snapshotListAction(_ context.Context, cmd *cli.Command) error {
 	metas, err := snapshot.List()
 	if err != nil {
 		return fmt.Errorf("listing snapshots: %w", err)
+	}
+	if metas == nil {
+		metas = []snapshot.Meta{}
+	}
+	if outputJSON(cmd, metas) {
+		return nil
 	}
 
 	if len(metas) == 0 {

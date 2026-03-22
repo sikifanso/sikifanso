@@ -103,8 +103,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) updateNormal(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch {
 		case key.Matches(msg, keys.Quit):
 			m.quitting = true
@@ -145,8 +144,7 @@ func (m model) updateNormal(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch {
 		case key.Matches(msg, keys.Escape):
 			m.searching = false

@@ -26,6 +26,13 @@ func doctorCmd() *cli.Command {
 func doctorAction(ctx context.Context, cmd *cli.Command) error {
 	clusterName := cmd.String("cluster")
 
+	renderResults := func(results []doctor.Result) error {
+		if outputJSON(cmd, results) {
+			return nil
+		}
+		return printResults(results)
+	}
+
 	checks := doctor.InfraChecks()
 
 	sess, err := session.Load(clusterName)
@@ -38,7 +45,7 @@ func doctorAction(ctx context.Context, cmd *cli.Command) error {
 			Cause: fmt.Sprintf("no session found for cluster %q", clusterName),
 			Fix:   "sikifanso cluster create",
 		})
-		return printResults(results)
+		return renderResults(results)
 	}
 
 	cs, err := kube.ClientForCluster(clusterName)
@@ -51,7 +58,7 @@ func doctorAction(ctx context.Context, cmd *cli.Command) error {
 			Cause: fmt.Sprintf("cannot connect to cluster: %v", err),
 			Fix:   "sikifanso cluster start",
 		})
-		return printResults(results)
+		return renderResults(results)
 	}
 
 	cfg, cfgErr := infraconfig.Load(sess.GitOpsPath)
@@ -72,7 +79,7 @@ func doctorAction(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	results := doctor.Run(ctx, checks)
-	return printResults(results)
+	return renderResults(results)
 }
 
 func printResults(results []doctor.Result) error {

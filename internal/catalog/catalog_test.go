@@ -11,15 +11,16 @@ import (
 func writeEntry(t *testing.T, dir string, content string, name string) {
 	t.Helper()
 	catalogDir := filepath.Join(dir, "catalog")
-	if err := os.MkdirAll(catalogDir, 0755); err != nil {
+	if err := os.MkdirAll(catalogDir, 0o755); err != nil {
 		t.Fatalf("creating catalog dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(catalogDir, name+".yaml"), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(catalogDir, name+".yaml"), []byte(content), 0o644); err != nil {
 		t.Fatalf("writing catalog file %s: %v", name, err)
 	}
 }
 
 func TestList_ReturnsAllEntries(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	writeEntry(t, dir, `
@@ -54,9 +55,10 @@ enabled: true
 }
 
 func TestList_IgnoresSubdirectoriesAndNonYAML(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	catalogDir := filepath.Join(dir, "catalog")
-	if err := os.MkdirAll(catalogDir, 0755); err != nil {
+	if err := os.MkdirAll(catalogDir, 0o755); err != nil {
 		t.Fatalf("creating catalog dir: %v", err)
 	}
 
@@ -73,15 +75,15 @@ enabled: false
 `, "grafana")
 
 	// Create a subdirectory that should be skipped.
-	if err := os.MkdirAll(filepath.Join(catalogDir, "values"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(catalogDir, "values"), 0o755); err != nil {
 		t.Fatalf("creating values subdir: %v", err)
 	}
 	// Place a YAML file inside the subdir — should not be read.
-	if err := os.WriteFile(filepath.Join(catalogDir, "values", "grafana.yaml"), []byte("somekey: val\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(catalogDir, "values", "grafana.yaml"), []byte("somekey: val\n"), 0o644); err != nil {
 		t.Fatalf("writing subdir file: %v", err)
 	}
 	// Place a non-YAML file at the top level — should be skipped.
-	if err := os.WriteFile(filepath.Join(catalogDir, "README.md"), []byte("# catalog\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(catalogDir, "README.md"), []byte("# catalog\n"), 0o644); err != nil {
 		t.Fatalf("writing README: %v", err)
 	}
 
@@ -98,8 +100,9 @@ enabled: false
 }
 
 func TestList_EmptyCatalogDir(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "catalog"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "catalog"), 0o755); err != nil {
 		t.Fatalf("creating catalog dir: %v", err)
 	}
 
@@ -113,6 +116,7 @@ func TestList_EmptyCatalogDir(t *testing.T) {
 }
 
 func TestList_MissingCatalogDir(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	entries, err := List(dir)
@@ -125,6 +129,7 @@ func TestList_MissingCatalogDir(t *testing.T) {
 }
 
 func TestFind_ReturnsCorrectEntry(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	writeEntry(t, dir, `
@@ -165,6 +170,7 @@ enabled: true
 }
 
 func TestFind_NotFoundErrorListsAvailable(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	for _, name := range []string{"alertmanager", "gitea", "grafana"} {
@@ -188,6 +194,7 @@ func TestFind_NotFoundErrorListsAvailable(t *testing.T) {
 }
 
 func TestSetEnabled_FlipsTrueAndWritesToDisk(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	writeEntry(t, dir, `
@@ -222,6 +229,7 @@ enabled: false
 }
 
 func TestSetEnabled_FlipsFalseAndWritesToDisk(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	writeEntry(t, dir, `
@@ -249,6 +257,7 @@ enabled: true
 }
 
 func TestSetEnabled_NonexistentReturnsError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	writeEntry(t, dir, `
@@ -272,6 +281,7 @@ enabled: false
 }
 
 func TestCatalogDir(t *testing.T) {
+	t.Parallel()
 	got := CatalogDir("/some/gitops/path")
 	want := "/some/gitops/path/catalog"
 	if got != want {

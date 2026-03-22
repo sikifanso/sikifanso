@@ -15,7 +15,7 @@ import (
 func SyncAndReport(ctx context.Context, log *zap.Logger, w io.Writer, opts SyncOpts) {
 	if err := Sync(ctx, log, opts.ClusterName, opts.ArgoURL); err != nil {
 		log.Warn("argocd sync failed", zap.Error(err))
-		fmt.Fprintln(w, "ArgoCD unreachable — will reconcile on next cluster start")
+		_, _ = fmt.Fprintln(w, "ArgoCD unreachable — will reconcile on next cluster start")
 		return
 	}
 
@@ -29,7 +29,7 @@ func ReportStatus(ctx context.Context, log *zap.Logger, w io.Writer, opts SyncOp
 	client, err := NewClient(ctx, opts.ArgoURL, opts.Username, opts.Password)
 	if err != nil {
 		log.Debug("could not create ArgoCD REST client for status polling", zap.Error(err))
-		fmt.Fprintln(w, "Status polling unavailable")
+		_, _ = fmt.Fprintln(w, "Status polling unavailable")
 		return
 	}
 
@@ -40,7 +40,7 @@ func ReportStatus(ctx context.Context, log *zap.Logger, w io.Writer, opts SyncOp
 	}
 
 	if len(apps) == 0 {
-		fmt.Fprintln(w, "No ArgoCD applications found")
+		_, _ = fmt.Fprintln(w, "No ArgoCD applications found")
 		return
 	}
 
@@ -63,7 +63,7 @@ func printAppStatusTable(w io.Writer, apps []AppStatus) {
 		}
 	}
 
-	fmt.Fprintf(w, "%-*s  %-*s  %-*s  %s\n", nameW, "NAME", syncW, "SYNC", healthW, "HEALTH", "")
+	_, _ = fmt.Fprintf(w, "%-*s  %-*s  %-*s  %s\n", nameW, "NAME", syncW, "SYNC", healthW, "HEALTH", "")
 	for _, a := range apps {
 		indicator := color.GreenString("✓")
 		if a.Health == HealthDegraded || a.Health == HealthMissing {
@@ -72,7 +72,7 @@ func printAppStatusTable(w io.Writer, apps []AppStatus) {
 			indicator = color.YellowString("~")
 		}
 
-		fmt.Fprintf(w, "%-*s  %s  %s  %s\n", nameW, a.Name,
+		_, _ = fmt.Fprintf(w, "%-*s  %s  %s  %s\n", nameW, a.Name,
 			colorizeStatus(a.SyncStatus, syncW),
 			colorizeStatus(a.Health, healthW),
 			indicator)

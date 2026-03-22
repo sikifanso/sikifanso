@@ -24,6 +24,12 @@ func newApp() *cli.Command {
 				Value:   defaultClusterName,
 				Sources: cli.EnvVars("SIKIFANSO_CLUSTER"),
 			},
+			&cli.StringFlag{
+				Name:    "output",
+				Aliases: []string{"o"},
+				Usage:   "Output format: table, json",
+				Value:   outputFormatTable,
+			},
 		},
 		Before:   setupAction,
 		Commands: []*cli.Command{clusterCmd(), argocdCmd(), appCmd(), catalogCmd(), profileCmd(), agentCmd(), mcpCmd(), statusCmd(), doctorCmd(), snapshotCmd(), restoreCmd(), dashboardCmd(), upgradeCmd()},

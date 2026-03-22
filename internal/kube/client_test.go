@@ -18,6 +18,7 @@ func TestClientForCluster_NoKubeconfig(t *testing.T) {
 }
 
 func TestNodeReady_True(t *testing.T) {
+	t.Parallel()
 	node := corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-node"},
 		Status: corev1.NodeStatus{
@@ -32,6 +33,7 @@ func TestNodeReady_True(t *testing.T) {
 }
 
 func TestNodeReady_False(t *testing.T) {
+	t.Parallel()
 	node := corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-node"},
 		Status: corev1.NodeStatus{
@@ -46,6 +48,7 @@ func TestNodeReady_False(t *testing.T) {
 }
 
 func TestNodeReady_NoCondition(t *testing.T) {
+	t.Parallel()
 	node := corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-node"},
 	}

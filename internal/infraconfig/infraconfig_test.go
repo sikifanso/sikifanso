@@ -7,6 +7,7 @@ import (
 )
 
 func TestDefaults(t *testing.T) {
+	t.Parallel()
 	cfg := Defaults()
 
 	if cfg.Platform.K3sImage != "rancher/k3s:v1.29.1-k3s2" {
@@ -57,6 +58,7 @@ func TestDefaults(t *testing.T) {
 }
 
 func TestLoadMissingDir(t *testing.T) {
+	t.Parallel()
 	cfg, err := Load("/nonexistent/path")
 	if err != nil {
 		t.Fatalf("Load returned error for missing dir: %v", err)
@@ -68,9 +70,10 @@ func TestLoadMissingDir(t *testing.T) {
 }
 
 func TestLoadPartialFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	infraDir := filepath.Join(dir, "infra")
-	if err := os.MkdirAll(infraDir, 0755); err != nil {
+	if err := os.MkdirAll(infraDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -84,7 +87,7 @@ nodePorts:
   https: 30083
   argocdUI: 30080
   hubbleUI: 30081
-`), 0644); err != nil {
+`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -114,9 +117,10 @@ nodePorts:
 }
 
 func TestLoadFullFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	infraDir := filepath.Join(dir, "infra")
-	if err := os.MkdirAll(infraDir, 0755); err != nil {
+	if err := os.MkdirAll(infraDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -156,7 +160,7 @@ server:
 	}
 
 	for name, content := range files {
-		if err := os.WriteFile(filepath.Join(infraDir, name), []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(infraDir, name), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -205,6 +209,7 @@ server:
 }
 
 func TestMergeValues(t *testing.T) {
+	t.Parallel()
 	base := map[string]interface{}{
 		"a": "base-a",
 		"b": map[string]interface{}{
@@ -251,6 +256,7 @@ func TestMergeValues(t *testing.T) {
 }
 
 func TestMergeValuesDoesNotMutateBase(t *testing.T) {
+	t.Parallel()
 	base := map[string]interface{}{
 		"key": "original",
 	}

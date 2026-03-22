@@ -64,6 +64,12 @@ func catalogListAction(_ context.Context, cmd *cli.Command, sess *session.Sessio
 	if err != nil {
 		return fmt.Errorf("listing catalog: %w", err)
 	}
+	if entries == nil {
+		entries = []catalog.Entry{}
+	}
+	if outputJSON(cmd, entries) {
+		return nil
+	}
 	if len(entries) == 0 {
 		fmt.Fprintln(os.Stderr, "Catalog is empty")
 		return nil

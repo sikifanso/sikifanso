@@ -11,9 +11,9 @@ import (
 
 // Profile defines a named set of catalog apps to enable together.
 type Profile struct {
-	Name        string
-	Description string
-	Apps        []string
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Apps        []string `json:"apps"`
 }
 
 // registry holds all known profiles keyed by name.

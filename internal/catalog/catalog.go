@@ -135,7 +135,7 @@ func SetEnabled(gitOpsPath, name string, enabled bool) error {
 		return fmt.Errorf("closing encoder for %s: %w", name, err)
 	}
 
-	if err := os.WriteFile(filePath, buf.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(filePath, buf.Bytes(), 0o644); err != nil {
 		return fmt.Errorf("writing catalog file %s: %w", fileName, err)
 	}
 

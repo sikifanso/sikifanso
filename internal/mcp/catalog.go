@@ -50,8 +50,8 @@ func registerCatalogTools(s *mcp.Server, deps *Deps) {
 			if e.Enabled {
 				status = "enabled"
 			}
-			sb.WriteString(fmt.Sprintf("  - %-20s [%-14s] %s — %s\n",
-				e.Name, e.Category, status, e.Description))
+			fmt.Fprintf(&sb, "  - %-20s [%-14s] %s — %s\n",
+				e.Name, e.Category, status, e.Description)
 		}
 		return textResult(sb.String())
 	})
@@ -78,8 +78,8 @@ func registerCatalogTools(s *mcp.Server, deps *Deps) {
 		var sb strings.Builder
 		sb.WriteString("Available profiles:\n")
 		for _, p := range profiles {
-			sb.WriteString(fmt.Sprintf("  %s — %s\n    Apps: %s\n",
-				p.Name, p.Description, strings.Join(p.Apps, ", ")))
+			fmt.Fprintf(&sb, "  %s — %s\n    Apps: %s\n",
+				p.Name, p.Description, strings.Join(p.Apps, ", "))
 		}
 		return textResult(sb.String())
 	})

@@ -8,6 +8,7 @@ import (
 )
 
 func TestCreate_WritesEntryAndValues(t *testing.T) {
+	t.Parallel()
 	dir := setupGitOps(t)
 
 	err := Create(dir, CreateOpts{
@@ -53,6 +54,7 @@ func TestCreate_WritesEntryAndValues(t *testing.T) {
 }
 
 func TestCreate_DefaultValues(t *testing.T) {
+	t.Parallel()
 	dir := setupGitOps(t)
 
 	err := Create(dir, CreateOpts{Name: "default-agent"})
@@ -78,6 +80,7 @@ func TestCreate_DefaultValues(t *testing.T) {
 }
 
 func TestCreate_DuplicateReturnsError(t *testing.T) {
+	t.Parallel()
 	dir := setupGitOps(t)
 
 	if err := Create(dir, CreateOpts{Name: "dup-agent"}); err != nil {
@@ -90,6 +93,7 @@ func TestCreate_DuplicateReturnsError(t *testing.T) {
 }
 
 func TestCreate_InvalidNameReturnsError(t *testing.T) {
+	t.Parallel()
 	dir := setupGitOps(t)
 
 	for _, name := range []string{"", "UPPER", "has space", "-starts-dash"} {
@@ -101,6 +105,7 @@ func TestCreate_InvalidNameReturnsError(t *testing.T) {
 }
 
 func TestList_ReturnsAgentsSorted(t *testing.T) {
+	t.Parallel()
 	dir := setupGitOps(t)
 
 	for _, name := range []string{"zulu", "alpha", "middle"} {
@@ -122,6 +127,7 @@ func TestList_ReturnsAgentsSorted(t *testing.T) {
 }
 
 func TestList_EmptyDir(t *testing.T) {
+	t.Parallel()
 	dir := setupGitOps(t)
 	agents, err := List(dir)
 	if err != nil {
@@ -133,6 +139,7 @@ func TestList_EmptyDir(t *testing.T) {
 }
 
 func TestFind_Existing(t *testing.T) {
+	t.Parallel()
 	dir := setupGitOps(t)
 	if err := Create(dir, CreateOpts{Name: "found-me", CPU: "1000m"}); err != nil {
 		t.Fatal(err)
@@ -151,6 +158,7 @@ func TestFind_Existing(t *testing.T) {
 }
 
 func TestFind_NotFound(t *testing.T) {
+	t.Parallel()
 	dir := setupGitOps(t)
 	_, err := Find(dir, "nonexistent")
 	if err == nil {
@@ -159,6 +167,7 @@ func TestFind_NotFound(t *testing.T) {
 }
 
 func TestDelete_RemovesFiles(t *testing.T) {
+	t.Parallel()
 	dir := setupGitOps(t)
 	if err := Create(dir, CreateOpts{Name: "doomed"}); err != nil {
 		t.Fatal(err)
@@ -177,6 +186,7 @@ func TestDelete_RemovesFiles(t *testing.T) {
 }
 
 func TestDelete_NotFoundReturnsError(t *testing.T) {
+	t.Parallel()
 	dir := setupGitOps(t)
 	err := Delete(dir, "ghost")
 	if err == nil {
@@ -189,7 +199,7 @@ func setupGitOps(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	for _, sub := range []string{"agents", filepath.Join("agents", "values")} {
-		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}

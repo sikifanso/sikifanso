@@ -32,7 +32,6 @@ const (
 	gitopsPrefix = "gitops"
 )
 
-
 // SnapshotsDir returns the snapshots directory, creating it if it doesn't exist.
 func SnapshotsDir() (string, error) {
 	root, err := paths.RootDir()
@@ -40,7 +39,7 @@ func SnapshotsDir() (string, error) {
 		return "", err
 	}
 	dir := filepath.Join(root, snapshotsDir)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("creating snapshots directory: %w", err)
 	}
 	return dir, nil
@@ -268,7 +267,7 @@ func Delete(snapshotName string) error {
 func writeTarBytes(tw *tar.Writer, name string, data []byte) error {
 	hdr := &tar.Header{
 		Name:    name,
-		Mode:    0644,
+		Mode:    0o644,
 		Size:    int64(len(data)),
 		ModTime: time.Now(),
 	}
@@ -397,7 +396,7 @@ func extractGitops(tr *tar.Reader, targetDir string) error {
 		rel := strings.TrimPrefix(hdr.Name, gitopsPrefix+"/")
 		if rel == "" {
 			// This is the gitops root directory entry itself.
-			if err := os.MkdirAll(cleanTarget, 0755); err != nil {
+			if err := os.MkdirAll(cleanTarget, 0o755); err != nil {
 				return fmt.Errorf("creating target directory: %w", err)
 			}
 			continue
@@ -417,7 +416,7 @@ func extractGitops(tr *tar.Reader, targetDir string) error {
 				return fmt.Errorf("creating directory %s: %w", rel, err)
 			}
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 				return fmt.Errorf("creating parent directory for %s: %w", rel, err)
 			}
 			if err := extractFile(dest, hdr, tr); err != nil {

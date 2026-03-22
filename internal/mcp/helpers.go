@@ -36,7 +36,7 @@ func kubeClient(clusterName string) (*kubernetes.Clientset, *mcp.CallToolResult,
 // requireDocker checks that Docker is running, returning an MCP error result on failure.
 func requireDocker(ctx context.Context) (*mcp.CallToolResult, any, error) {
 	if err := preflight.CheckDocker(ctx); err != nil {
-		return errResult(fmt.Errorf("Docker is not running: %w", err))
+		return errResult(fmt.Errorf("docker is not running: %w", err))
 	}
 	return nil, nil, nil
 }

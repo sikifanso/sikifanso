@@ -18,6 +18,7 @@ func (m mockCheck) Run(_ context.Context) []Result {
 }
 
 func TestRun_AllOK(t *testing.T) {
+	t.Parallel()
 	checks := []Check{
 		mockCheck{results: []Result{{Name: "a", OK: true, Message: "good"}}},
 		mockCheck{results: []Result{{Name: "b", OK: true, Message: "fine"}}},
@@ -35,6 +36,7 @@ func TestRun_AllOK(t *testing.T) {
 }
 
 func TestRun_AllFailed(t *testing.T) {
+	t.Parallel()
 	checks := []Check{
 		mockCheck{results: []Result{{Name: "a", OK: false, Cause: "broken"}}},
 		mockCheck{results: []Result{{Name: "b", OK: false, Cause: "also broken"}}},
@@ -52,6 +54,7 @@ func TestRun_AllFailed(t *testing.T) {
 }
 
 func TestRun_Mixed(t *testing.T) {
+	t.Parallel()
 	checks := []Check{
 		mockCheck{results: []Result{{Name: "ok-check", OK: true}}},
 		mockCheck{results: []Result{{Name: "fail-check", OK: false, Cause: "oops"}}},
@@ -70,6 +73,7 @@ func TestRun_Mixed(t *testing.T) {
 }
 
 func TestRun_MultiResultCheck(t *testing.T) {
+	t.Parallel()
 	checks := []Check{
 		mockCheck{results: []Result{
 			{Name: "app-1", OK: true},
@@ -88,6 +92,7 @@ func TestRun_MultiResultCheck(t *testing.T) {
 }
 
 func TestRun_Empty(t *testing.T) {
+	t.Parallel()
 	results := Run(context.Background(), nil)
 	if len(results) != 0 {
 		t.Fatalf("Run with nil checks returned %d results, want 0", len(results))
@@ -95,6 +100,7 @@ func TestRun_Empty(t *testing.T) {
 }
 
 func TestRun_CheckReturnsNil(t *testing.T) {
+	t.Parallel()
 	checks := []Check{
 		mockCheck{results: nil},
 	}
@@ -106,6 +112,7 @@ func TestRun_CheckReturnsNil(t *testing.T) {
 }
 
 func TestDeploymentAvailable(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		conditions []appsv1.DeploymentCondition
@@ -149,6 +156,7 @@ func TestDeploymentAvailable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			deploy := &appsv1.Deployment{}
 			deploy.Status.Conditions = tt.conditions
 
@@ -161,6 +169,7 @@ func TestDeploymentAvailable(t *testing.T) {
 }
 
 func TestExtractDegradedCause(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		status map[string]interface{}
@@ -284,6 +293,7 @@ func TestExtractDegradedCause(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := extractDegradedCause(tt.status)
 			if got != tt.want {
 				t.Errorf("extractDegradedCause() = %q, want %q", got, tt.want)

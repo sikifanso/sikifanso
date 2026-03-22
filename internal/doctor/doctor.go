@@ -12,11 +12,11 @@ import (
 
 // Result holds the outcome of a single health check.
 type Result struct {
-	Name    string
-	OK      bool
-	Message string // human-readable status (e.g., "3/3 nodes ready", "v27.0.3")
-	Cause   string // only populated on failure
-	Fix     string // suggested fix command, only on failure
+	Name    string `json:"name"`
+	OK      bool   `json:"ok"`
+	Message string `json:"message,omitempty"`
+	Cause   string `json:"cause,omitempty"`
+	Fix     string `json:"fix,omitempty"`
 }
 
 // Check is a single health check that can be executed.
@@ -27,7 +27,7 @@ type Check interface {
 
 // Run executes all provided checks sequentially and returns their results.
 func Run(ctx context.Context, checks []Check) []Result {
-	var results []Result
+	results := make([]Result, 0, len(checks))
 	for _, c := range checks {
 		results = append(results, c.Run(ctx)...)
 	}

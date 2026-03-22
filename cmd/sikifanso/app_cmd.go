@@ -181,6 +181,14 @@ func appAddAction(ctx context.Context, cmd *cli.Command, sess *session.Session) 
 	return nil
 }
 
+type appListItem struct {
+	Name      string `json:"name"`
+	Chart     string `json:"chart"`
+	Version   string `json:"version"`
+	Namespace string `json:"namespace"`
+	Source    string `json:"source"`
+}
+
 func appListAction(_ context.Context, cmd *cli.Command, sess *session.Session) error {
 	apps, err := app.List(sess.GitOpsPath)
 	if err != nil {
@@ -190,6 +198,20 @@ func appListAction(_ context.Context, cmd *cli.Command, sess *session.Session) e
 	catalogEntries, err := catalog.List(sess.GitOpsPath)
 	if err != nil {
 		return fmt.Errorf("listing catalog: %w", err)
+	}
+
+	if cmd.String("output") == outputFormatJSON {
+		items := make([]appListItem, 0, len(apps)+len(catalogEntries))
+		for _, a := range apps {
+			items = append(items, appListItem{Name: a.Name, Chart: a.Chart, Version: a.Version, Namespace: a.Namespace, Source: "custom"})
+		}
+		for _, e := range catalogEntries {
+			if e.Enabled {
+				items = append(items, appListItem{Name: e.Name, Chart: e.Chart, Version: e.TargetRevision, Namespace: e.Namespace, Source: "catalog"})
+			}
+		}
+		outputJSON(cmd, items)
+		return nil
 	}
 
 	hasEnabledCatalog := slices.ContainsFunc(catalogEntries, func(e catalog.Entry) bool {

@@ -80,7 +80,7 @@ func Save(s *Session) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("creating session directory: %w", err)
 	}
 
@@ -90,7 +90,7 @@ func Save(s *Session) error {
 	}
 
 	path := filepath.Join(dir, sessionFile)
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("writing session file: %w", err)
 	}
 	return nil

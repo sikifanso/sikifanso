@@ -12,6 +12,7 @@ import (
 )
 
 func TestList_ReturnsAllProfiles(t *testing.T) {
+	t.Parallel()
 	profiles := List()
 	if len(profiles) != len(registry) {
 		t.Fatalf("List() returned %d profiles, want %d", len(profiles), len(registry))
@@ -19,6 +20,7 @@ func TestList_ReturnsAllProfiles(t *testing.T) {
 }
 
 func TestList_SortedByName(t *testing.T) {
+	t.Parallel()
 	profiles := List()
 	for i := 1; i < len(profiles); i++ {
 		if profiles[i].Name < profiles[i-1].Name {
@@ -28,6 +30,7 @@ func TestList_SortedByName(t *testing.T) {
 }
 
 func TestGet_ExistingProfile(t *testing.T) {
+	t.Parallel()
 	p, err := Get("agent-dev")
 	if err != nil {
 		t.Fatalf("Get(agent-dev) error: %v", err)
@@ -41,6 +44,7 @@ func TestGet_ExistingProfile(t *testing.T) {
 }
 
 func TestGet_NotFound(t *testing.T) {
+	t.Parallel()
 	_, err := Get("nonexistent")
 	if err == nil {
 		t.Fatal("Get(nonexistent) should return error")
@@ -48,6 +52,7 @@ func TestGet_NotFound(t *testing.T) {
 }
 
 func TestResolve_SingleProfile(t *testing.T) {
+	t.Parallel()
 	apps, err := Resolve("agent-minimal")
 	if err != nil {
 		t.Fatalf("Resolve error: %v", err)
@@ -59,6 +64,7 @@ func TestResolve_SingleProfile(t *testing.T) {
 }
 
 func TestResolve_CompositeProfile(t *testing.T) {
+	t.Parallel()
 	apps, err := Resolve("agent-minimal,rag")
 	if err != nil {
 		t.Fatalf("Resolve error: %v", err)
@@ -89,6 +95,7 @@ func TestResolve_CompositeProfile(t *testing.T) {
 }
 
 func TestResolve_InvalidProfile(t *testing.T) {
+	t.Parallel()
 	_, err := Resolve("agent-minimal,nonexistent")
 	if err == nil {
 		t.Fatal("expected error for invalid profile in composite")
@@ -96,6 +103,7 @@ func TestResolve_InvalidProfile(t *testing.T) {
 }
 
 func TestResolve_EmptyString(t *testing.T) {
+	t.Parallel()
 	apps, err := Resolve("")
 	if err != nil {
 		t.Fatalf("Resolve error: %v", err)
@@ -106,6 +114,7 @@ func TestResolve_EmptyString(t *testing.T) {
 }
 
 func TestNames_Sorted(t *testing.T) {
+	t.Parallel()
 	names := Names()
 	if len(names) != len(registry) {
 		t.Fatalf("Names() returned %d, want %d", len(names), len(registry))
@@ -118,9 +127,10 @@ func TestNames_Sorted(t *testing.T) {
 }
 
 func TestApply_EnablesAppsOnDisk(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	catalogDir := filepath.Join(dir, "catalog")
-	if err := os.MkdirAll(catalogDir, 0755); err != nil {
+	if err := os.MkdirAll(catalogDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -136,7 +146,7 @@ func TestApply_EnablesAppsOnDisk(t *testing.T) {
 			Enabled:        false,
 		}
 		data, _ := yaml.Marshal(entry)
-		if err := os.WriteFile(filepath.Join(catalogDir, name+".yaml"), data, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(catalogDir, name+".yaml"), data, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -167,9 +177,10 @@ func TestApply_EnablesAppsOnDisk(t *testing.T) {
 }
 
 func TestApply_SkipsMissingApps(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	catalogDir := filepath.Join(dir, "catalog")
-	if err := os.MkdirAll(catalogDir, 0755); err != nil {
+	if err := os.MkdirAll(catalogDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -184,7 +195,7 @@ func TestApply_SkipsMissingApps(t *testing.T) {
 		Enabled:        false,
 	}
 	data, _ := yaml.Marshal(entry)
-	if err := os.WriteFile(filepath.Join(catalogDir, "postgresql.yaml"), data, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(catalogDir, "postgresql.yaml"), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
 

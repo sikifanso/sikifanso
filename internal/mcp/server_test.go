@@ -22,19 +22,20 @@ func newTestClient(t *testing.T) *mcp.ClientSession {
 	if err != nil {
 		t.Fatalf("Server connect: %v", err)
 	}
-	t.Cleanup(func() { ss.Close() })
+	t.Cleanup(func() { _ = ss.Close() })
 
 	c := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1.0"}, nil)
 	cs, err := c.Connect(context.Background(), t2, nil)
 	if err != nil {
 		t.Fatalf("Client connect: %v", err)
 	}
-	t.Cleanup(func() { cs.Close() })
+	t.Cleanup(func() { _ = cs.Close() })
 
 	return cs
 }
 
 func TestNewServer_RegistersAllTools(t *testing.T) {
+	t.Parallel()
 	cs := newTestClient(t)
 
 	result, err := cs.ListTools(context.Background(), nil)
@@ -68,6 +69,7 @@ func TestNewServer_RegistersAllTools(t *testing.T) {
 }
 
 func TestNewServer_ToolsHaveDescriptions(t *testing.T) {
+	t.Parallel()
 	cs := newTestClient(t)
 
 	result, err := cs.ListTools(context.Background(), nil)
@@ -83,6 +85,7 @@ func TestNewServer_ToolsHaveDescriptions(t *testing.T) {
 }
 
 func TestNewServer_GlobalToolsHaveNoRequiredParams(t *testing.T) {
+	t.Parallel()
 	cs := newTestClient(t)
 
 	result, err := cs.ListTools(context.Background(), nil)
@@ -100,9 +103,14 @@ func TestNewServer_GlobalToolsHaveNoRequiredParams(t *testing.T) {
 		if schema == nil {
 			continue
 		}
-		b, _ := json.Marshal(schema)
+		b, err := json.Marshal(schema)
+		if err != nil {
+			t.Fatalf("marshal schema for %q: %v", tool.Name, err)
+		}
 		var schemaMap map[string]any
-		json.Unmarshal(b, &schemaMap)
+		if err := json.Unmarshal(b, &schemaMap); err != nil {
+			t.Fatalf("unmarshal schema for %q: %v", tool.Name, err)
+		}
 		if req, ok := schemaMap["required"]; ok {
 			if reqArr, ok := req.([]any); ok && len(reqArr) > 0 {
 				t.Errorf("tool %q should have no required params, got %v", tool.Name, reqArr)
@@ -112,6 +120,7 @@ func TestNewServer_GlobalToolsHaveNoRequiredParams(t *testing.T) {
 }
 
 func TestTextResult(t *testing.T) {
+	t.Parallel()
 	result, out, err := textResult("hello world")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -135,6 +144,7 @@ func TestTextResult(t *testing.T) {
 }
 
 func TestErrResult(t *testing.T) {
+	t.Parallel()
 	result, out, err := errResult(fmt.Errorf("something broke"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

@@ -53,11 +53,11 @@ type CreateOpts struct {
 
 // Info holds agent metadata for display.
 type Info struct {
-	Name      string
-	Namespace string
-	CPU       string
-	Memory    string
-	Pods      string
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	CPU       string `json:"cpu"`
+	Memory    string `json:"memory"`
+	Pods      string `json:"pods"`
 }
 
 var validName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
@@ -124,7 +124,7 @@ func Create(gitOpsPath string, opts CreateOpts) error {
 	if err != nil {
 		return fmt.Errorf("marshaling agent entry: %w", err)
 	}
-	if err := os.WriteFile(absEntry, entryData, 0644); err != nil {
+	if err := os.WriteFile(absEntry, entryData, 0o644); err != nil {
 		return fmt.Errorf("writing agent entry: %w", err)
 	}
 
@@ -134,7 +134,7 @@ func Create(gitOpsPath string, opts CreateOpts) error {
 	if err != nil {
 		return fmt.Errorf("marshaling agent values: %w", err)
 	}
-	if err := os.WriteFile(absValues, valuesData, 0644); err != nil {
+	if err := os.WriteFile(absValues, valuesData, 0o644); err != nil {
 		return fmt.Errorf("writing agent values: %w", err)
 	}
 

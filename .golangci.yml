@@ -8,3 +8,18 @@ linters:
     - staticcheck
     - unused
     - ineffassign
+    - misspell
+    - gocritic
+    - revive
+    - prealloc
+
+  exclusions:
+    rules:
+      - linters: [revive]
+        text: "exported: "
+      - linters: [revive]
+        text: "package-comments:"
+
+formatters:
+  enable:
+    - gofumpt

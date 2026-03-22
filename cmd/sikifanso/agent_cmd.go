@@ -61,10 +61,16 @@ func agentListCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "list",
 		Usage: "List agent namespaces",
-		Action: withSession(func(_ context.Context, _ *cli.Command, sess *session.Session) error {
+		Action: withSession(func(_ context.Context, cmd *cli.Command, sess *session.Session) error {
 			agents, err := agent.List(sess.GitOpsPath)
 			if err != nil {
 				return fmt.Errorf("listing agents: %w", err)
+			}
+			if agents == nil {
+				agents = []agent.Info{}
+			}
+			if outputJSON(cmd, agents) {
+				return nil
 			}
 			if len(agents) == 0 {
 				fmt.Fprintln(os.Stderr, "No agents found")

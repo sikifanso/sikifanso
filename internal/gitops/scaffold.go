@@ -53,7 +53,7 @@ func Scaffold(ctx context.Context, log *zap.Logger, targetDir string, opts Scaff
 		"agents",
 		filepath.Join("agents", "values"),
 	} {
-		if err := os.MkdirAll(filepath.Join(targetDir, sub), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Join(targetDir, sub), 0o755); err != nil {
 			return fmt.Errorf("creating %s directory: %w", sub, err)
 		}
 	}

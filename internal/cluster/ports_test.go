@@ -7,6 +7,7 @@ import (
 )
 
 func TestFindFreePorts(t *testing.T) {
+	t.Parallel()
 	ports, err := findFreePorts(5)
 	if err != nil {
 		t.Fatalf("findFreePorts(5): %v", err)
@@ -28,6 +29,7 @@ func TestFindFreePorts(t *testing.T) {
 }
 
 func TestFindFreePortsZero(t *testing.T) {
+	t.Parallel()
 	ports, err := findFreePorts(0)
 	if err != nil {
 		t.Fatalf("findFreePorts(0): %v", err)
@@ -38,6 +40,7 @@ func TestFindFreePortsZero(t *testing.T) {
 }
 
 func TestAllAvailableWithFreePorts(t *testing.T) {
+	t.Parallel()
 	ports, err := findFreePorts(3)
 	if err != nil {
 		t.Fatalf("findFreePorts: %v", err)
@@ -49,6 +52,7 @@ func TestAllAvailableWithFreePorts(t *testing.T) {
 }
 
 func TestAllAvailableWithBoundPort(t *testing.T) {
+	t.Parallel()
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
 		t.Fatalf("Listen: %v", err)
