@@ -24,3 +24,14 @@ type AppDetail struct {
 	AppStatus
 	Resources []ResourceStatus
 }
+
+// SyncOptions configures the behaviour of a sync operation.
+type SyncOptions struct {
+	Prune bool
+}
+
+// WatchEvent is a single event received from an application watch stream.
+type WatchEvent struct {
+	App     AppStatus
+	Deleted bool
+}

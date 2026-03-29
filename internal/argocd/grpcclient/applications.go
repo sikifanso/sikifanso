@@ -82,3 +82,65 @@ func toResourceStatuses(resources []v1alpha1.ResourceStatus) []ResourceStatus {
 	}
 	return result
 }
+
+// SyncApplication triggers a sync for the named application.
+func (c *Client) SyncApplication(ctx context.Context, name string, opts SyncOptions) error {
+	client, closer, err := c.newAppClient()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = closer.Close() }()
+
+	_, err = client.Sync(ctx, &applicationpkg.ApplicationSyncRequest{
+		Name:  &name,
+		Prune: &opts.Prune,
+	})
+	if err != nil {
+		return fmt.Errorf("syncing application %q: %w", name, err)
+	}
+	return nil
+}
+
+// WatchApplication returns a channel of WatchEvents for the named application.
+// The channel is closed when the stream ends or the context is cancelled.
+// The closer is managed by the spawned goroutine.
+func (c *Client) WatchApplication(ctx context.Context, name string) (<-chan WatchEvent, error) {
+	client, closer, err := c.newAppClient()
+	if err != nil {
+		return nil, err
+	}
+
+	stream, err := client.Watch(ctx, &applicationpkg.ApplicationQuery{Name: &name})
+	if err != nil {
+		_ = closer.Close()
+		return nil, fmt.Errorf("watching application %q: %w", name, err)
+	}
+
+	ch := make(chan WatchEvent, 16)
+	go func() {
+		defer func() { _ = closer.Close() }()
+		defer close(ch)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			event, recvErr := stream.Recv()
+			if recvErr != nil {
+				return
+			}
+			we := WatchEvent{
+				App:     toAppStatus(event.Application),
+				Deleted: string(event.Type) == "DELETED",
+			}
+			select {
+			case ch <- we:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return ch, nil
+}
