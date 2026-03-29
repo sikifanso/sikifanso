@@ -98,6 +98,7 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 			{Port: fmt.Sprintf("%d:%d", hp.HTTP, np.HTTP), NodeFilters: []string{"server:*"}},
 			{Port: fmt.Sprintf("%d:%d", hp.HTTPS, np.HTTPS), NodeFilters: []string{"server:*"}},
 			{Port: fmt.Sprintf("%d:%d", hp.ArgoCDUI, np.ArgoCDUI), NodeFilters: []string{"server:*"}},
+			{Port: fmt.Sprintf("%d:%d", hp.ArgoCDGRPC, np.ArgoCDGRPC), NodeFilters: []string{"server:*"}},
 			{Port: fmt.Sprintf("%d:%d", hp.HubbleUI, np.HubbleUI), NodeFilters: []string{"server:*"}},
 		},
 		Volumes: []conf.VolumeWithNodeFilters{
@@ -206,6 +207,7 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 		Services: session.ServiceInfo{
 			ArgoCD: session.ArgoCDInfo{
 				URL:          fmt.Sprintf("http://localhost:%d", hp.ArgoCDUI),
+				GRPCAddress:  fmt.Sprintf("localhost:%d", hp.ArgoCDGRPC),
 				Username:     "admin",
 				Password:     argocdResult.AdminPassword,
 				ChartVersion: argocdResult.ChartVersion,
