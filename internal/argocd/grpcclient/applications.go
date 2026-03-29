@@ -206,3 +206,110 @@ func (c *Client) ManagedResources(ctx context.Context, name string) ([]ManagedRe
 	}
 	return result, nil
 }
+
+// Rollback rolls an application back to the specified history revision ID.
+func (c *Client) Rollback(ctx context.Context, name string, revisionID int64) error {
+	client, closer, err := c.newAppClient()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = closer.Close() }()
+
+	_, err = client.Rollback(ctx, &applicationpkg.ApplicationRollbackRequest{
+		Name: &name,
+		Id:   &revisionID,
+	})
+	if err != nil {
+		return fmt.Errorf("rolling back application %q: %w", name, err)
+	}
+	return nil
+}
+
+// DeleteApplication deletes an application by name. When cascade is true the
+// associated Kubernetes resources are also deleted.
+func (c *Client) DeleteApplication(ctx context.Context, name string, cascade bool) error {
+	client, closer, err := c.newAppClient()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = closer.Close() }()
+
+	_, err = client.Delete(ctx, &applicationpkg.ApplicationDeleteRequest{
+		Name:    &name,
+		Cascade: &cascade,
+	})
+	if err != nil {
+		return fmt.Errorf("deleting application %q: %w", name, err)
+	}
+	return nil
+}
+
+// PodLogs returns a channel of log lines for the specified pod/container within
+// an application. The channel is closed when the stream ends or ctx is cancelled.
+// The closer is managed by the spawned goroutine.
+func (c *Client) PodLogs(ctx context.Context, name, podName, container string, follow bool) (<-chan string, error) {
+	client, closer, err := c.newAppClient()
+	if err != nil {
+		return nil, err
+	}
+
+	stream, err := client.PodLogs(ctx, &applicationpkg.ApplicationPodLogsQuery{
+		Name:      &name,
+		PodName:   &podName,
+		Container: &container,
+		Follow:    &follow,
+	})
+	if err != nil {
+		_ = closer.Close()
+		return nil, fmt.Errorf("streaming pod logs for app %q pod %q: %w", name, podName, err)
+	}
+
+	ch := make(chan string, 64)
+	go func() {
+		defer func() { _ = closer.Close() }()
+		defer close(ch)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			entry, recvErr := stream.Recv()
+			if recvErr != nil {
+				return
+			}
+			if entry.Content == nil {
+				continue
+			}
+			select {
+			case ch <- *entry.Content:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return ch, nil
+}
+
+// RunResourceAction runs an action on a specific managed resource within an application.
+func (c *Client) RunResourceAction(ctx context.Context, appName, namespace, resourceName, group, kind, action string) error {
+	client, closer, err := c.newAppClient()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = closer.Close() }()
+
+	_, err = client.RunResourceAction(ctx, &applicationpkg.ResourceActionRunRequest{
+		Name:         &appName,
+		Namespace:    &namespace,
+		ResourceName: &resourceName,
+		Group:        &group,
+		Kind:         &kind,
+		Action:       &action,
+	})
+	if err != nil {
+		return fmt.Errorf("running action %q on resource %q/%q in app %q: %w", action, kind, resourceName, appName, err)
+	}
+	return nil
+}
