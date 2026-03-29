@@ -239,8 +239,8 @@ Each failure includes a cause and a suggested fix command:
 
 ```
 ok  Docker daemon       running (v27.0.3)
-ok  k3d cluster         3/3 nodes ready
-ok  Cilium              DaemonSet 3/3 ready
+ok  k3d cluster         1/1 nodes ready
+ok  Cilium              DaemonSet 1/1 ready
 ok  Hubble              relay deployment ready
 ok  ArgoCD              3/3 deployments ready
 !!  App: grafana         Degraded -- Synced

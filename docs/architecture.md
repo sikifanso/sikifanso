@@ -94,7 +94,7 @@ The ApplicationSet controller webhook is reached via the **Kubernetes API server
 
 When you run `sikifanso cluster create`, the following happens in order:
 
-1. **k3d cluster** is created with 1 server + 2 agents running k3s v1.29. The flannel CNI and kube-proxy are disabled (Cilium replaces both).
+1. **k3d cluster** is created as a single-node cluster running k3s v1.29. The flannel CNI and kube-proxy are disabled (Cilium replaces both).
 2. **Cilium** is installed via Helm as a full kube-proxy replacement with ingress controller and Hubble UI enabled.
 3. **ArgoCD** is installed via Helm, configured to use the hostPath-mounted gitops repo as its source.
 4. **GitOps repo** is cloned from the bootstrap template and both root ApplicationSets are applied.

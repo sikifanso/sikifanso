@@ -36,7 +36,7 @@ hide:
 sikifanso cluster create
 ```
 
-- **k3d cluster** — 1 server + 2 agents, k3s v1.29
+- **k3d cluster** — single-node k3s v1.29
 - **Cilium** — full kube-proxy replacement, ingress controller, Hubble UI
 - **ArgoCD** — configured to read from a local gitops repo on your filesystem
 - **GitOps repo** — scaffolded from a bootstrap template, mounted into the cluster

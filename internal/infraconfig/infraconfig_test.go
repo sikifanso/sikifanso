@@ -16,8 +16,8 @@ func TestDefaults(t *testing.T) {
 	if cfg.Platform.Servers != 1 {
 		t.Errorf("Servers = %d, want 1", cfg.Platform.Servers)
 	}
-	if cfg.Platform.Agents != 2 {
-		t.Errorf("Agents = %d, want 2", cfg.Platform.Agents)
+	if cfg.Platform.Agents != 0 {
+		t.Errorf("Agents = %d, want 0", cfg.Platform.Agents)
 	}
 	if cfg.Platform.NodePorts.HTTP != 30082 {
 		t.Errorf("NodePorts.HTTP = %d, want 30082", cfg.Platform.NodePorts.HTTP)

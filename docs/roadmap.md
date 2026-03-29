@@ -48,10 +48,10 @@ For users who want to manage their homelab infrastructure as code alongside clou
 
 ## Multi-node topologies
 
-Currently fixed at 1 server + 2 agents. Possibilities:
+Default is a single-node cluster (1 server, 0 agents). Possibilities:
 
-- Configurable node counts
 - HA control plane (3 servers)
+- Additional agent nodes for workload isolation
 - Dedicated nodes for specific workloads (labeled/tainted)
 
 ## Dashboard -- shipped

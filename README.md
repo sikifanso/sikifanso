@@ -24,7 +24,7 @@ A CLI tool that bootstraps Kubernetes clusters purpose-built for running AI agen
 sikifanso cluster create
 ```
 
-- **k3d cluster** -- 1 server + 2 agents, k3s v1.29
+- **k3d cluster** -- single-node k3s v1.29
 - **Cilium** -- full kube-proxy replacement, ingress controller, Hubble UI, network isolation for agents
 - **ArgoCD** -- configured to read from a local gitops repo on your filesystem
 - **GitOps repo** -- scaffolded from a bootstrap template, mounted into the cluster
@@ -214,8 +214,8 @@ Runs a series of health checks against the cluster and prints a structured repor
 
 ```
 ok  Docker daemon       running (v27.0.3)
-ok  k3d cluster         3/3 nodes ready
-ok  Cilium              DaemonSet 3/3 ready
+ok  k3d cluster         1/1 nodes ready
+ok  Cilium              DaemonSet 1/1 ready
 ok  Hubble              relay deployment ready
 ok  ArgoCD              3/3 deployments ready
 ok  App: litellm-proxy  Healthy -- Synced
