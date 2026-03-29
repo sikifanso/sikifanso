@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
 	"github.com/alicanalbayrak/sikifanso/internal/argocd"
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcsync"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
@@ -50,31 +53,105 @@ func syncOptsFromSession(sess *session.Session) argocd.SyncOpts {
 	}
 }
 
-// waitSyncFlags returns the --wait and --timeout flags shared by all mutation commands.
+// waitSyncFlags returns the --no-wait and --timeout flags shared by all mutation commands.
 func waitSyncFlags() []cli.Flag {
 	return []cli.Flag{
-		&cli.BoolFlag{Name: "wait", Usage: "Wait for apps to reach Synced/Healthy after sync"},
-		&cli.DurationFlag{Name: "timeout", Usage: "Timeout for --wait", Value: argocd.DefaultSyncTimeout},
+		&cli.BoolFlag{Name: "no-wait", Usage: "Trigger sync without waiting"},
+		&cli.DurationFlag{Name: "timeout", Usage: "Timeout for sync wait", Value: grpcsync.DefaultTimeout},
 	}
 }
 
+// grpcClientFromSession creates a gRPC client from session credentials.
+func grpcClientFromSession(ctx context.Context, sess *session.Session) (*grpcclient.Client, error) {
+	if sess.Services.ArgoCD.GRPCAddress == "" {
+		return nil, fmt.Errorf("no gRPC address in session — cluster may need recreation")
+	}
+	return grpcclient.NewClient(ctx, grpcclient.Options{
+		Address:  sess.Services.ArgoCD.GRPCAddress,
+		Username: sess.Services.ArgoCD.Username,
+		Password: sess.Services.ArgoCD.Password,
+	})
+}
+
 // syncAfterMutation performs a sync after a mutation command (enable/disable/add/remove).
-// When --wait is set, it uses SyncModeWait to block until apps are Synced/Healthy.
-// If app names are provided, only those specific apps are polled instead of all apps.
+// Uses gRPC when available, falling back to the old REST-based sync for older clusters.
 func syncAfterMutation(ctx context.Context, cmd *cli.Command, sess *session.Session, apps ...string) {
-	opts := syncOptsFromSession(sess)
-	if cmd.Bool("wait") {
-		opts.Mode = argocd.SyncModeWait
-		opts.Timeout = cmd.Duration("timeout")
-		if len(apps) > 0 {
-			opts.WaitApps = apps
-		}
-		if err := argocd.SyncWithOpts(ctx, zapLogger, opts); err != nil {
-			zapLogger.Warn("sync wait failed", zap.Error(err))
-			fmt.Fprintf(os.Stderr, "sync timed out — apps may still be reconciling\n")
-		}
-		argocd.ReportStatus(ctx, zapLogger, os.Stderr, opts)
+	if sess.Services.ArgoCD.GRPCAddress == "" {
+		// Fallback to old REST-based sync for clusters without gRPC.
+		opts := syncOptsFromSession(sess)
+		argocd.SyncAndReport(ctx, zapLogger, os.Stderr, opts)
 		return
 	}
-	argocd.SyncAndReport(ctx, zapLogger, os.Stderr, opts)
+
+	client, err := grpcClientFromSession(ctx, sess)
+	if err != nil {
+		zapLogger.Warn("gRPC sync failed, falling back to REST", zap.Error(err))
+		opts := syncOptsFromSession(sess)
+		argocd.SyncAndReport(ctx, zapLogger, os.Stderr, opts)
+		return
+	}
+	defer client.Close()
+
+	orch := grpcsync.NewOrchestrator(client, zapLogger)
+	req := grpcsync.Request{
+		Apps:    apps,
+		Timeout: cmd.Duration("timeout"),
+		Prune:   true,
+	}
+
+	// If no specific apps were given, list all apps to sync.
+	if len(req.Apps) == 0 {
+		listed, listErr := client.ListApplications(ctx)
+		if listErr != nil {
+			zapLogger.Warn("listing apps for sync failed", zap.Error(listErr))
+			fmt.Fprintln(os.Stderr, "ArgoCD sync: could not list apps")
+			return
+		}
+		for _, a := range listed {
+			req.Apps = append(req.Apps, a.Name)
+		}
+	}
+
+	if cmd.Bool("no-wait") {
+		if err := orch.SyncOnly(ctx, req); err != nil {
+			zapLogger.Warn("sync trigger failed", zap.Error(err))
+		}
+		fmt.Fprintln(os.Stderr, "ArgoCD sync triggered")
+		return
+	}
+
+	results, exitCode := orch.SyncAndWait(ctx, req)
+	printSyncResults(os.Stderr, results)
+
+	switch exitCode {
+	case grpcsync.ExitFailure:
+		fmt.Fprintln(os.Stderr, "sync failed: one or more apps unhealthy")
+	case grpcsync.ExitTimeout:
+		fmt.Fprintln(os.Stderr, "sync timed out: apps may still be reconciling")
+	}
+}
+
+// printSyncResults writes a human-readable summary of sync results.
+func printSyncResults(w io.Writer, results []grpcsync.Result) {
+	for _, r := range results {
+		indicator := "✓"
+		if r.Health == "Degraded" || r.Health == "Missing" {
+			indicator = "✗"
+		} else if r.SyncStatus != "Synced" || r.Health != "Healthy" {
+			indicator = "~"
+		}
+
+		fmt.Fprintf(w, "  %s %s  sync=%s health=%s\n", indicator, r.App, r.SyncStatus, r.Health)
+
+		// Print failed resources indented under the app.
+		for _, res := range r.Resources {
+			if res.Health != "" && res.Health != "Healthy" {
+				fmt.Fprintf(w, "      %s/%s  health=%s", res.Kind, res.Name, res.Health)
+				if res.Message != "" {
+					fmt.Fprintf(w, "  %s", res.Message)
+				}
+				fmt.Fprintln(w)
+			}
+		}
+	}
 }
