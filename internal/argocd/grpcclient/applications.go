@@ -7,6 +7,7 @@ import (
 
 	applicationpkg "github.com/argoproj/argo-cd/v2/pkg/apiclient/application"
 	"github.com/argoproj/argo-cd/v2/pkg/apis/application/v1alpha1"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 // ErrAppNotFound is returned when a requested application does not exist.
@@ -132,7 +133,7 @@ func (c *Client) WatchApplication(ctx context.Context, name string) (<-chan Watc
 			}
 			we := WatchEvent{
 				App:     toAppStatus(event.Application),
-				Deleted: string(event.Type) == "DELETED",
+				Deleted: event.Type == watch.Deleted,
 			}
 			select {
 			case ch <- we:
@@ -195,13 +196,13 @@ func (c *Client) ManagedResources(ctx context.Context, name string) ([]ManagedRe
 			continue
 		}
 		result = append(result, ManagedResource{
-			Group:       item.Group,
-			Kind:        item.Kind,
-			Namespace:   item.Namespace,
-			Name:        item.Name,
-			LiveState:   item.LiveState,
-			TargetState: item.TargetState,
-			Diff:        item.NormalizedLiveState,
+			Group:              item.Group,
+			Kind:               item.Kind,
+			Namespace:          item.Namespace,
+			Name:               item.Name,
+			LiveState:          item.LiveState,
+			TargetState:        item.TargetState,
+			NormalizedLiveState: item.NormalizedLiveState,
 		})
 	}
 	return result, nil
@@ -278,7 +279,7 @@ func (c *Client) PodLogs(ctx context.Context, name, podName, container string, f
 			if recvErr != nil {
 				return
 			}
-			if entry.Content == nil {
+			if entry.Content == nil || *entry.Content == "" {
 				continue
 			}
 			select {
@@ -293,7 +294,7 @@ func (c *Client) PodLogs(ctx context.Context, name, podName, container string, f
 }
 
 // RunResourceAction runs an action on a specific managed resource within an application.
-func (c *Client) RunResourceAction(ctx context.Context, appName, namespace, resourceName, group, kind, action string) error {
+func (c *Client) RunResourceAction(ctx context.Context, appName string, ref ResourceRef, action string) error {
 	client, closer, err := c.newAppClient()
 	if err != nil {
 		return err
@@ -302,14 +303,14 @@ func (c *Client) RunResourceAction(ctx context.Context, appName, namespace, reso
 
 	_, err = client.RunResourceAction(ctx, &applicationpkg.ResourceActionRunRequest{
 		Name:         &appName,
-		Namespace:    &namespace,
-		ResourceName: &resourceName,
-		Group:        &group,
-		Kind:         &kind,
+		Namespace:    &ref.Namespace,
+		ResourceName: &ref.Name,
+		Group:        &ref.Group,
+		Kind:         &ref.Kind,
 		Action:       &action,
 	})
 	if err != nil {
-		return fmt.Errorf("running action %q on resource %q/%q in app %q: %w", action, kind, resourceName, appName, err)
+		return fmt.Errorf("running action %q on resource %q/%q in app %q: %w", action, ref.Kind, ref.Name, appName, err)
 	}
 	return nil
 }

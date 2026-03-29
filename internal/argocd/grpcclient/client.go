@@ -30,7 +30,6 @@ type Client struct {
 // NewClient connects to ArgoCD over gRPC, authenticates with the given
 // credentials, and returns an authenticated Client.
 func NewClient(ctx context.Context, opts Options) (*Client, error) {
-	// Step 1: create an unauthenticated client to obtain a session token.
 	baseOpts := &apiclient.ClientOptions{
 		ServerAddr: opts.Address,
 		Insecure:   true,
@@ -42,7 +41,6 @@ func NewClient(ctx context.Context, opts Options) (*Client, error) {
 		return nil, fmt.Errorf("creating ArgoCD gRPC client: %w", err)
 	}
 
-	// Step 2: authenticate via SessionService.Create to get a JWT token.
 	sessConn, sessClient, err := unauthClient.NewSessionClient()
 	if err != nil {
 		return nil, fmt.Errorf("creating session client: %w", err)
@@ -57,7 +55,6 @@ func NewClient(ctx context.Context, opts Options) (*Client, error) {
 		return nil, fmt.Errorf("authenticating with ArgoCD: %w", err)
 	}
 
-	// Step 3: recreate client with the auth token set.
 	authOpts := &apiclient.ClientOptions{
 		ServerAddr: opts.Address,
 		Insecure:   true,

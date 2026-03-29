@@ -36,14 +36,22 @@ type WatchEvent struct {
 	Deleted bool
 }
 
-// ManagedResource describes a single Kubernetes resource that is managed by an
-// ArgoCD application, together with its live/target state and diff.
+// ResourceRef identifies a specific Kubernetes resource within an ArgoCD application.
+type ResourceRef struct {
+	Group     string
+	Kind      string
+	Namespace string
+	Name      string
+}
+
+// ManagedResource describes a single Kubernetes resource managed by an ArgoCD
+// application, together with its live and target state.
 type ManagedResource struct {
-	Group       string
-	Kind        string
-	Namespace   string
-	Name        string
-	LiveState   string
-	TargetState string
-	Diff        string
+	Group              string
+	Kind               string
+	Namespace          string
+	Name               string
+	LiveState          string
+	TargetState        string
+	NormalizedLiveState string
 }
