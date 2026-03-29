@@ -17,3 +17,15 @@ func TestNewClient_InvalidAddress(t *testing.T) {
 		t.Fatal("expected error for unreachable address")
 	}
 }
+
+func TestAppStatusFields(t *testing.T) {
+	t.Parallel()
+	s := AppStatus{
+		Name:       "test",
+		SyncStatus: "Synced",
+		Health:     "Healthy",
+	}
+	if s.Name != "test" {
+		t.Fatal("unexpected name")
+	}
+}
