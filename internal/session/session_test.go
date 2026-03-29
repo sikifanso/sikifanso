@@ -129,6 +129,36 @@ func TestRemove(t *testing.T) {
 	}
 }
 
+func TestSessionRoundTrip_GRPCAddress(t *testing.T) {
+	t.Setenv("SIKIFANSO_HOME", t.TempDir())
+
+	sess := &Session{
+		ClusterName: "grpc-test",
+		State:       "running",
+		Services: ServiceInfo{
+			ArgoCD: ArgoCDInfo{
+				URL:         "http://localhost:30080",
+				GRPCAddress: "localhost:30084",
+				Username:    "admin",
+				Password:    "secret",
+			},
+		},
+	}
+
+	if err := Save(sess); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	loaded, err := Load("grpc-test")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if loaded.Services.ArgoCD.GRPCAddress != "localhost:30084" {
+		t.Fatalf("GRPCAddress = %q, want %q", loaded.Services.ArgoCD.GRPCAddress, "localhost:30084")
+	}
+}
+
 func TestDir(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SIKIFANSO_HOME", tmp)
