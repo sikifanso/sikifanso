@@ -144,3 +144,65 @@ func (c *Client) WatchApplication(ctx context.Context, name string) (<-chan Watc
 
 	return ch, nil
 }
+
+// ResourceTree returns the full resource tree for the named application.
+func (c *Client) ResourceTree(ctx context.Context, name string) ([]ResourceStatus, error) {
+	client, closer, err := c.newAppClient()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = closer.Close() }()
+
+	tree, err := client.ResourceTree(ctx, &applicationpkg.ResourcesQuery{ApplicationName: &name})
+	if err != nil {
+		return nil, fmt.Errorf("fetching resource tree for %q: %w", name, err)
+	}
+
+	result := make([]ResourceStatus, 0, len(tree.Nodes))
+	for _, node := range tree.Nodes {
+		rs := ResourceStatus{
+			Group:     node.Group,
+			Kind:      node.Kind,
+			Namespace: node.Namespace,
+			Name:      node.Name,
+		}
+		if node.Health != nil {
+			rs.Health = string(node.Health.Status)
+			rs.Message = node.Health.Message
+		}
+		result = append(result, rs)
+	}
+	return result, nil
+}
+
+// ManagedResources returns the list of managed resources with their live/target
+// state for the named application.
+func (c *Client) ManagedResources(ctx context.Context, name string) ([]ManagedResource, error) {
+	client, closer, err := c.newAppClient()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = closer.Close() }()
+
+	resp, err := client.ManagedResources(ctx, &applicationpkg.ResourcesQuery{ApplicationName: &name})
+	if err != nil {
+		return nil, fmt.Errorf("fetching managed resources for %q: %w", name, err)
+	}
+
+	result := make([]ManagedResource, 0, len(resp.Items))
+	for _, item := range resp.Items {
+		if item == nil {
+			continue
+		}
+		result = append(result, ManagedResource{
+			Group:       item.Group,
+			Kind:        item.Kind,
+			Namespace:   item.Namespace,
+			Name:        item.Name,
+			LiveState:   item.LiveState,
+			TargetState: item.TargetState,
+			Diff:        item.NormalizedLiveState,
+		})
+	}
+	return result, nil
+}

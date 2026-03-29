@@ -35,3 +35,15 @@ type WatchEvent struct {
 	App     AppStatus
 	Deleted bool
 }
+
+// ManagedResource describes a single Kubernetes resource that is managed by an
+// ArgoCD application, together with its live/target state and diff.
+type ManagedResource struct {
+	Group       string
+	Kind        string
+	Namespace   string
+	Name        string
+	LiveState   string
+	TargetState string
+	Diff        string
+}
