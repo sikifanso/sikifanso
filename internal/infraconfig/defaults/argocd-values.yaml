@@ -13,6 +13,8 @@ server:
     enabled: false
   service:
     type: NodePort
+  serviceGrpc:
+    type: NodePort
 
 repoServer:
   resources:

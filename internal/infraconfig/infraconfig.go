@@ -18,10 +18,11 @@ type PlatformConfig struct {
 
 // NodePortConfig holds container-side NodePort assignments.
 type NodePortConfig struct {
-	HTTP     int `yaml:"http"`
-	HTTPS    int `yaml:"https"`
-	ArgoCDUI int `yaml:"argocdUI"`
-	HubbleUI int `yaml:"hubbleUI"`
+	HTTP       int `yaml:"http"`
+	HTTPS      int `yaml:"https"`
+	ArgoCDUI   int `yaml:"argocdUI"`
+	ArgoCDGRPC int `yaml:"argocdGRPC"`
+	HubbleUI   int `yaml:"hubbleUI"`
 }
 
 // ChartConfig holds Helm chart coordinates for a component.
@@ -100,6 +101,9 @@ func ArgoCDRuntimeOverrides(np NodePortConfig) map[string]interface{} {
 		"server": map[string]interface{}{
 			"service": map[string]interface{}{
 				"nodePortHttp": np.ArgoCDUI,
+			},
+			"serviceGrpc": map[string]interface{}{
+				"nodePortGrpc": np.ArgoCDGRPC,
 			},
 		},
 	}

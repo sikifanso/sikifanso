@@ -5,4 +5,5 @@ nodePorts:
   http: 30082
   https: 30083
   argocdUI: 30080
+  argocdGRPC: 30084
   hubbleUI: 30081
