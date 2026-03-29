@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/alicanalbayrak/sikifanso/internal/argocd"
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/doctor"
 	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
 	"github.com/alicanalbayrak/sikifanso/internal/kube"
@@ -67,7 +68,15 @@ func registerDoctorTools(s *mcp.Server, _ *Deps) {
 
 		dynClient, err := dynamic.NewForConfig(restCfg)
 		if err == nil {
-			checks = append(checks, doctor.AppChecks(dynClient, sess.GitOpsPath, cfg)...)
+			var grpcClient *grpcclient.Client
+			if sess.Services.ArgoCD.GRPCAddress != "" {
+				grpcClient, _ = grpcclient.NewClient(ctx, grpcclient.Options{
+					Address:  sess.Services.ArgoCD.GRPCAddress,
+					Username: sess.Services.ArgoCD.Username,
+					Password: sess.Services.ArgoCD.Password,
+				})
+			}
+			checks = append(checks, doctor.AppChecks(dynClient, sess.GitOpsPath, cfg, grpcClient)...)
 		}
 
 		results := doctor.Run(ctx, checks)

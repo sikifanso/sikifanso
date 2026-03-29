@@ -72,7 +72,8 @@ func doctorAction(ctx context.Context, cmd *cli.Command) error {
 	if err == nil {
 		dynClient, dynErr := dynamic.NewForConfig(restCfg)
 		if dynErr == nil {
-			checks = append(checks, doctor.AppChecks(dynClient, sess.GitOpsPath, cfg)...)
+			grpcClient, _ := grpcClientFromSession(ctx, sess)
+			checks = append(checks, doctor.AppChecks(dynClient, sess.GitOpsPath, cfg, grpcClient)...)
 		} else {
 			zapLogger.Warn("could not create dynamic client", zap.Error(dynErr))
 		}

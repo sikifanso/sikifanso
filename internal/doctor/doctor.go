@@ -3,6 +3,7 @@ package doctor
 import (
 	"context"
 
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -51,9 +52,11 @@ func ClusterChecks(cs *kubernetes.Clientset, cfg *infraconfig.InfraConfig) []Che
 }
 
 // AppChecks returns checks for enabled catalog apps and agent namespaces.
-func AppChecks(dynClient dynamic.Interface, gitOpsPath string, cfg *infraconfig.InfraConfig) []Check {
+// grpcClient is optional; when non-nil, unhealthy apps are enriched with
+// per-resource details fetched from the ArgoCD gRPC API.
+func AppChecks(dynClient dynamic.Interface, gitOpsPath string, cfg *infraconfig.InfraConfig, grpcClient *grpcclient.Client) []Check {
 	return []Check{
-		AppsCheck{DynClient: dynClient, GitOpsPath: gitOpsPath, ArgoCDNamespace: cfg.ArgoCD.Namespace},
+		AppsCheck{DynClient: dynClient, GitOpsPath: gitOpsPath, ArgoCDNamespace: cfg.ArgoCD.Namespace, GRPCClient: grpcClient},
 		AgentsCheck{DynClient: dynClient, GitOpsPath: gitOpsPath, ArgoCDNamespace: cfg.ArgoCD.Namespace},
 	}
 }

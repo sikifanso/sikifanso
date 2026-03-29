@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/catalog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -21,10 +22,13 @@ var applicationGVR = schema.GroupVersionResource{
 
 // AppsCheck verifies the health and sync status of each enabled catalog app
 // by querying the ArgoCD Application CRD via the dynamic client.
+// When GRPCClient is non-nil and an app is unhealthy, the resource tree is
+// fetched to enrich the result with per-resource failure details.
 type AppsCheck struct {
 	DynClient       dynamic.Interface
 	GitOpsPath      string
 	ArgoCDNamespace string
+	GRPCClient      *grpcclient.Client
 }
 
 func (c AppsCheck) Run(ctx context.Context) []Result {
@@ -87,6 +91,13 @@ func (c AppsCheck) checkApp(ctx context.Context, entry catalog.Entry) Result {
 
 	cause := extractDegradedCause(status)
 
+	// Enrich with resource tree details when a gRPC client is available.
+	if c.GRPCClient != nil {
+		if treeCause := c.resourceTreeCause(ctx, entry.Name); treeCause != "" {
+			cause = treeCause
+		}
+	}
+
 	return Result{
 		Name:    name,
 		OK:      false,
@@ -94,6 +105,29 @@ func (c AppsCheck) checkApp(ctx context.Context, entry catalog.Entry) Result {
 		Cause:   cause,
 		Fix:     fmt.Sprintf("sikifanso catalog disable %s", entry.Name),
 	}
+}
+
+// resourceTreeCause fetches the resource tree via gRPC and returns a summary
+// of the first unhealthy resource, or an empty string on error.
+func (c AppsCheck) resourceTreeCause(ctx context.Context, appName string) string {
+	nodes, err := c.GRPCClient.ResourceTree(ctx, appName)
+	if err != nil {
+		return ""
+	}
+	for _, node := range nodes {
+		if node.Health != "" && node.Health != "Healthy" {
+			cause := fmt.Sprintf("%s/%s", node.Kind, node.Name)
+			if node.Namespace != "" {
+				cause += " in " + node.Namespace
+			}
+			cause += fmt.Sprintf(" (%s)", node.Health)
+			if node.Message != "" {
+				cause += ": " + node.Message
+			}
+			return cause
+		}
+	}
+	return ""
 }
 
 // extractDegradedCause scans status.resources[] for the first entry with a
