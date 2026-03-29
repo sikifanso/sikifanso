@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/alicanalbayrak/sikifanso/internal/argocd"
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/kube"
 	"github.com/alicanalbayrak/sikifanso/internal/preflight"
 	"github.com/alicanalbayrak/sikifanso/internal/profile"
@@ -41,10 +42,31 @@ func requireDocker(ctx context.Context) (*mcp.CallToolResult, any, error) {
 	return nil, nil, nil
 }
 
-// triggerSync fires ArgoCD webhooks to trigger reconciliation.
-// Does not wait for sync to complete — use doctor or argocd_apps to check status.
+// triggerSync triggers ArgoCD reconciliation using gRPC when available,
+// falling back to the legacy REST path for older clusters.
 func triggerSync(ctx context.Context, deps *Deps, sess *session.Session) error {
-	return argocd.Sync(ctx, deps.Logger, sess.ClusterName, sess.Services.ArgoCD.URL)
+	if sess.Services.ArgoCD.GRPCAddress == "" {
+		// Fallback to old webhook-based sync for clusters without gRPC.
+		return argocd.Sync(ctx, deps.Logger, sess.ClusterName, sess.Services.ArgoCD.URL)
+	}
+	client, err := grpcclient.NewClient(ctx, grpcclient.Options{
+		Address:  sess.Services.ArgoCD.GRPCAddress,
+		Username: sess.Services.ArgoCD.Username,
+		Password: sess.Services.ArgoCD.Password,
+	})
+	if err != nil {
+		return fmt.Errorf("gRPC client: %w", err)
+	}
+	defer client.Close()
+
+	apps, err := client.ListApplications(ctx)
+	if err != nil {
+		return fmt.Errorf("listing apps for sync: %w", err)
+	}
+	for _, app := range apps {
+		_ = client.SyncApplication(ctx, app.Name, grpcclient.SyncOptions{Prune: true})
+	}
+	return nil
 }
 
 // appendSyncStatus triggers an ArgoCD sync and appends the outcome to the result string.

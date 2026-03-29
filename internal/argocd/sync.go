@@ -1,20 +1,14 @@
 package argocd
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
-	"github.com/alicanalbayrak/sikifanso/internal/kube"
 	"go.uber.org/zap"
 )
-
-// webhookPayload is a minimal GitHub push event that matches our local repo URL.
-var webhookPayload = []byte(`{"repository":{"clone_url":"/local-gitops","html_url":"/local-gitops","ssh_url":"/local-gitops"}}`)
 
 // Default polling constants for wait modes.
 const (
@@ -83,19 +77,12 @@ func Sync(ctx context.Context, log *zap.Logger, clusterName, argocdURL string) e
 	return SyncWithNamespace(ctx, log, clusterName, argocdURL, "")
 }
 
-// SyncWithNamespace is like Sync but allows specifying the ArgoCD namespace.
-func SyncWithNamespace(ctx context.Context, log *zap.Logger, clusterName, argocdURL, namespace string) error {
-	// 1. ArgoCD server webhook — invalidates repo-server cache.
-	if err := sendWebhook(ctx, log, argocdURL+"/api/webhook"); err != nil {
-		return fmt.Errorf("argocd server webhook: %w", err)
-	}
-
-	// 2. ApplicationSet controller webhook — triggers reconciliation.
-	//    Reachable only inside the cluster, so we proxy through the API server.
-	if err := sendAppSetWebhook(ctx, log, clusterName, namespace); err != nil {
-		return fmt.Errorf("applicationset webhook: %w", err)
-	}
-
+// SyncWithNamespace is a legacy fallback that previously sent webhook push
+// events to trigger ArgoCD reconciliation. Webhook logic has been removed in
+// favour of the gRPC sync path. This stub remains so that callers still
+// using the REST-based fallback compile; it is a no-op.
+func SyncWithNamespace(_ context.Context, log *zap.Logger, _, _, _ string) error {
+	log.Debug("SyncWithNamespace is a no-op — webhook logic removed, use gRPC sync path")
 	return nil
 }
 
@@ -285,54 +272,3 @@ func waitForApps(ctx context.Context, log *zap.Logger, opts SyncOpts) error {
 	}
 }
 
-func sendWebhook(ctx context.Context, log *zap.Logger, url string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(webhookPayload))
-	if err != nil {
-		return fmt.Errorf("creating request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-GitHub-Event", "push")
-
-	log.Info("sending webhook", zap.String("url", url))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("returned %s", resp.Status)
-	}
-	return nil
-}
-
-// sendAppSetWebhook proxies a webhook through the Kubernetes API server
-// to the ApplicationSet controller service (ClusterIP, port 7000).
-func sendAppSetWebhook(ctx context.Context, log *zap.Logger, clusterName, namespace string) error {
-	cs, err := kube.ClientForCluster(clusterName)
-	if err != nil {
-		return fmt.Errorf("creating clientset: %w", err)
-	}
-
-	ns := namespace
-	if ns == "" {
-		ns = DefaultNamespace
-	}
-
-	log.Info("sending webhook to applicationset controller", zap.String("cluster", clusterName))
-	result := cs.CoreV1().RESTClient().Post().
-		Namespace(ns).
-		Resource("services").
-		Name("argocd-applicationset-controller:http-webhook").
-		SubResource("proxy").
-		Suffix("api", "webhook").
-		SetHeader("Content-Type", "application/json").
-		SetHeader("X-GitHub-Event", "push").
-		Body(webhookPayload).
-		Do(ctx)
-
-	if err := result.Error(); err != nil {
-		return err
-	}
-	return nil
-}
