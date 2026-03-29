@@ -81,7 +81,14 @@ func findFreePorts(n int) ([]int, error) {
 			return nil, err
 		}
 		listeners = append(listeners, ln)
-		ports = append(ports, ln.Addr().(*net.TCPAddr).Port)
+		tcpAddr, ok := ln.Addr().(*net.TCPAddr)
+		if !ok {
+			for _, l := range listeners {
+				_ = l.Close()
+			}
+			return nil, fmt.Errorf("unexpected address type for listener")
+		}
+		ports = append(ports, tcpAddr.Port)
 	}
 
 	for _, ln := range listeners {

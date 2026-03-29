@@ -1,16 +1,22 @@
-.PHONY: build run clean snapshot release-dry-run lint test
+APP_NAME := sikifanso
+
+.PHONY: build run clean snapshot release-dry-run lint test test-integration vet fmt generate install
 
 # Build for your current platform
 build:
-	go build -o sikifanso ./cmd/sikifanso
+	go build -o bin/$(APP_NAME) ./cmd/$(APP_NAME)
 
 # Build and run
 run:
-	go run ./cmd/sikifanso
+	go run ./cmd/$(APP_NAME)
+
+# Install to $GOPATH/bin
+install:
+	go install ./cmd/$(APP_NAME)
 
 # Remove build artifacts
 clean:
-	rm -f sikifanso
+	rm -rf bin/
 	rm -f sikifanso.log
 	rm -rf dist/
 
@@ -26,6 +32,22 @@ release-dry-run:
 lint:
 	golangci-lint run ./...
 
+# Run go vet
+vet:
+	go vet ./...
+
+# Format code with goimports
+fmt:
+	goimports -w .
+
+# Run code generation
+generate:
+	go generate ./...
+
 # Run tests with race detector
 test:
-	go test ./... -race
+	go test -race -count=1 ./...
+
+# Run integration tests
+test-integration:
+	go test -race -count=1 -tags=integration ./...

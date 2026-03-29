@@ -87,7 +87,11 @@ func buildApplication(app AppParams, argocdNamespace string) (*unstructured.Unst
 		if err != nil {
 			return nil, fmt.Errorf("marshaling values: %w", err)
 		}
-		source["helm"].(map[string]interface{})["values"] = string(valuesYAML)
+		helmSection, ok := source["helm"].(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("unexpected source.helm type")
+		}
+		helmSection["values"] = string(valuesYAML)
 	}
 
 	obj := &unstructured.Unstructured{

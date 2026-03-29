@@ -3,15 +3,55 @@ version: "2"
 linters:
   default: none
   enable:
+    # Defaults
     - errcheck
     - govet
     - staticcheck
     - unused
     - ineffassign
-    - misspell
-    - gocritic
+    # Security
+    - gosec
+    # Style & quality
     - revive
+    - gocyclo
+    - misspell
+    - unconvert
+    - unparam
+    - gocritic
     - prealloc
+    # HTTP hygiene
+    - bodyclose
+    - noctx
+    # Testing
+    # TODO: enable testpackage after migrating tests to _test packages
+    # - testpackage
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
+    gocyclo:
+      min-complexity: 20
+    revive:
+      severity: warning
+    gosec:
+      excludes:
+        - G102    # bind all interfaces (expected for local listeners)
+        - G112    # slowloris (local dashboard server)
+        - G115    # integer overflow (64-bit only CLI)
+        - G117    # secret in struct field name (false positive)
+        - G118    # context cancel not called (called in caller)
+        - G122    # filepath.Walk TOCTOU (trusted local paths)
+        - G204    # subprocess with variable (opening browser)
+        - G301    # directory permissions (0o755 is fine for CLI)
+        - G304    # file path via variable (expected for CLI)
+        - G306    # file permissions (0o644 is fine for CLI)
+        - G705    # XSS via taint (JSON API response, not HTML)
 
   exclusions:
     rules:
@@ -19,7 +59,22 @@ linters:
         text: "exported: "
       - linters: [revive]
         text: "package-comments:"
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - unparam
+          - noctx
+          - gocyclo
+      - linters: [noctx]
+        text: "net\\.Listen"
+      - linters: [noctx]
+        text: "os/exec\\.Command"
+      - path: ".*\\.pb\\.go$"
+        linters:
+          - all
 
 formatters:
   enable:
+    - goimports
     - gofumpt

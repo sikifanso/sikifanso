@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -181,7 +182,10 @@ func Browse(opts BrowseOpts) (map[string]bool, error) {
 		return nil, err
 	}
 
-	final := result.(model)
+	final, ok := result.(model)
+	if !ok {
+		return nil, fmt.Errorf("unexpected tea model type %T", result)
+	}
 	if len(final.toggled) == 0 {
 		return nil, nil
 	}

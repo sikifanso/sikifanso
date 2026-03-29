@@ -1,5 +1,6 @@
 # Binaries
 /sikifanso
+/bin/
 *.exe
 
 # GoReleaser output
