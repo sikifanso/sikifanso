@@ -88,3 +88,16 @@ func TestAllAvailableWithBoundPort(t *testing.T) {
 		t.Errorf("expected error binding already-bound port %d", bound)
 	}
 }
+
+func TestDefaultPortsIncludeArgoCDGRPC(t *testing.T) {
+	t.Parallel()
+	if defaultPorts.ArgoCDGRPC == 0 {
+		t.Fatal("defaultPorts.ArgoCDGRPC is zero; expected a non-zero port")
+	}
+	if defaultPorts.ArgoCDGRPC == defaultPorts.ArgoCDUI {
+		t.Errorf("ArgoCDGRPC (%d) must differ from ArgoCDUI (%d)", defaultPorts.ArgoCDGRPC, defaultPorts.ArgoCDUI)
+	}
+	if defaultPorts.ArgoCDGRPC == defaultPorts.HubbleUI {
+		t.Errorf("ArgoCDGRPC (%d) must differ from HubbleUI (%d)", defaultPorts.ArgoCDGRPC, defaultPorts.HubbleUI)
+	}
+}

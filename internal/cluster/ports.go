@@ -8,24 +8,26 @@ import (
 // HostPorts holds the host-side port assignments for a k3d cluster.
 // Container-internal ports (NodePorts) stay fixed; only host ports vary.
 type HostPorts struct {
-	APIServer int // default 6443 → container 6443
-	HTTP      int // default 8080 → container 30082
-	HTTPS     int // default 8443 → container 30083
-	ArgoCDUI  int // default 30080 → container 30080
-	HubbleUI  int // default 30081 → container 30081
+	APIServer  int // default 6443 → container 6443
+	HTTP       int // default 8080 → container 30082
+	HTTPS      int // default 8443 → container 30083
+	ArgoCDUI   int // default 30080 → container 30080
+	HubbleUI   int // default 30081 → container 30081
+	ArgoCDGRPC int // default 30084 → container 30084
 }
 
 var defaultPorts = HostPorts{
-	APIServer: 6443,
-	HTTP:      8080,
-	HTTPS:     8443,
-	ArgoCDUI:  30080,
-	HubbleUI:  30081,
+	APIServer:  6443,
+	HTTP:       8080,
+	HTTPS:      8443,
+	ArgoCDUI:   30080,
+	HubbleUI:   30081,
+	ArgoCDGRPC: 30084,
 }
 
 // resolveHostPorts returns host ports for a new cluster.
 // It tries the defaults first (best UX for the single-cluster case).
-// If any default port is taken, it allocates all five from the OS.
+// If any default port is taken, it allocates all six from the OS.
 func resolveHostPorts() (HostPorts, error) {
 	defaults := []int{
 		defaultPorts.APIServer,
@@ -33,23 +35,25 @@ func resolveHostPorts() (HostPorts, error) {
 		defaultPorts.HTTPS,
 		defaultPorts.ArgoCDUI,
 		defaultPorts.HubbleUI,
+		defaultPorts.ArgoCDGRPC,
 	}
 
 	if allAvailable(defaults) {
 		return defaultPorts, nil
 	}
 
-	ports, err := findFreePorts(5)
+	ports, err := findFreePorts(6)
 	if err != nil {
 		return HostPorts{}, fmt.Errorf("allocating free ports: %w", err)
 	}
 
 	return HostPorts{
-		APIServer: ports[0],
-		HTTP:      ports[1],
-		HTTPS:     ports[2],
-		ArgoCDUI:  ports[3],
-		HubbleUI:  ports[4],
+		APIServer:  ports[0],
+		HTTP:       ports[1],
+		HTTPS:      ports[2],
+		ArgoCDUI:   ports[3],
+		HubbleUI:   ports[4],
+		ArgoCDGRPC: ports[5],
 	}, nil
 }
 
