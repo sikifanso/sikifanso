@@ -28,6 +28,7 @@ func NewServer(deps *Deps) *mcp.Server {
 	registerAgentTools(s, deps)
 	registerDoctorTools(s, deps)
 	registerKubeTools(s, deps)
+	registerArgoCDTools(s, deps)
 
 	return s
 }
