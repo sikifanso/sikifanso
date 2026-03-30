@@ -162,4 +162,88 @@ func registerArgoCDTools(s *mcp.Server, _ *Deps) {
 
 		return textResult(fmt.Sprintf("Application %q rolled back to revision %d.", input.Name, input.Revision))
 	})
+
+	type argocdProjectsInput struct {
+		Cluster string `json:"cluster" jsonschema:"Name of the cluster"`
+	}
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "argocd_projects_list",
+		Description: "List all ArgoCD projects in the cluster",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input argocdProjectsInput) (*mcp.CallToolResult, any, error) {
+		sess, r, sv, e := loadSession(input.Cluster)
+		if sess == nil {
+			return r, sv, e
+		}
+
+		client, err := grpcClientFromMCPSession(ctx, sess)
+		if err != nil {
+			return errResult(fmt.Errorf("connecting to ArgoCD gRPC: %w", err))
+		}
+		defer client.Close()
+
+		projects, err := client.ListProjects(ctx)
+		if err != nil {
+			return errResult(fmt.Errorf("listing projects: %w", err))
+		}
+
+		if len(projects) == 0 {
+			return textResult("No ArgoCD projects found.")
+		}
+
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "%-30s  %s\n", "NAME", "DESCRIPTION")
+		fmt.Fprintf(&sb, "%-30s  %s\n", "----", "-----------")
+		for _, p := range projects {
+			desc := p.Description
+			if desc == "" {
+				desc = "-"
+			}
+			fmt.Fprintf(&sb, "%-30s  %s\n", p.Name, desc)
+		}
+		return textResult(sb.String())
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "argocd_project_detail",
+		Description: "Get detailed information about an ArgoCD project",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input argocdAppInput) (*mcp.CallToolResult, any, error) {
+		sess, r, sv, e := loadSession(input.Cluster)
+		if sess == nil {
+			return r, sv, e
+		}
+
+		client, err := grpcClientFromMCPSession(ctx, sess)
+		if err != nil {
+			return errResult(fmt.Errorf("connecting to ArgoCD gRPC: %w", err))
+		}
+		defer client.Close()
+
+		proj, err := client.GetProject(ctx, input.Name)
+		if err != nil {
+			return errResult(fmt.Errorf("getting project %q: %w", input.Name, err))
+		}
+
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "Project: %s\n", proj.Name)
+		if proj.Description != "" {
+			fmt.Fprintf(&sb, "  Description: %s\n", proj.Description)
+		}
+
+		if len(proj.Sources) > 0 {
+			sb.WriteString("\nAllowed Sources:\n")
+			for _, src := range proj.Sources {
+				fmt.Fprintf(&sb, "  - %s\n", src)
+			}
+		}
+
+		if len(proj.Destinations) > 0 {
+			sb.WriteString("\nAllowed Destinations:\n")
+			for _, dest := range proj.Destinations {
+				fmt.Fprintf(&sb, "  - %s\n", dest)
+			}
+		}
+
+		return textResult(sb.String())
+	})
 }

@@ -46,6 +46,7 @@ func TestNewServer_RegistersAllTools(t *testing.T) {
 	expected := []string{
 		"agent_create", "agent_delete", "agent_info", "agent_list",
 		"argocd_app_detail", "argocd_app_diff", "argocd_apps", "argocd_rollback",
+		"argocd_project_detail", "argocd_projects_list",
 		"catalog_disable", "catalog_enable", "catalog_list",
 		"cluster_create", "cluster_delete", "cluster_info", "cluster_list", "cluster_start_stop",
 		"doctor",
