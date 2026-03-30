@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/alicanalbayrak/sikifanso/internal/argocd"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/kube"
 	"github.com/alicanalbayrak/sikifanso/internal/preflight"
@@ -42,12 +41,10 @@ func requireDocker(ctx context.Context) (*mcp.CallToolResult, any, error) {
 	return nil, nil, nil
 }
 
-// triggerSync triggers ArgoCD reconciliation using gRPC when available,
-// falling back to the legacy REST path for older clusters.
-func triggerSync(ctx context.Context, deps *Deps, sess *session.Session) error {
+// triggerSync triggers ArgoCD reconciliation via gRPC.
+func triggerSync(ctx context.Context, _ *Deps, sess *session.Session) error {
 	if sess.Services.ArgoCD.GRPCAddress == "" {
-		// Fallback to old webhook-based sync for clusters without gRPC.
-		return argocd.Sync(ctx, deps.Logger, sess.ClusterName, sess.Services.ArgoCD.URL)
+		return fmt.Errorf("no gRPC address in session — cluster may need recreation")
 	}
 	client, err := grpcclient.NewClient(ctx, grpcclient.Options{
 		Address:  sess.Services.ArgoCD.GRPCAddress,

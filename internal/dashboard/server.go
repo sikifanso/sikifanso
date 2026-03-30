@@ -9,7 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 
-	"github.com/alicanalbayrak/sikifanso/internal/argocd"
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/catalog"
 	"github.com/alicanalbayrak/sikifanso/internal/gitops"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
@@ -165,8 +165,20 @@ func handleToggle(opts ServerOpts) http.HandlerFunc {
 		}
 
 		ctx := context.Background()
-		if err := argocd.Sync(ctx, opts.Log, opts.ClusterName, sess.Services.ArgoCD.URL); err != nil {
-			opts.Log.Warn("argocd sync failed", zap.Error(err))
+		if sess.Services.ArgoCD.GRPCAddress != "" {
+			if client, cErr := grpcclient.NewClient(ctx, grpcclient.Options{
+				Address:  sess.Services.ArgoCD.GRPCAddress,
+				Username: sess.Services.ArgoCD.Username,
+				Password: sess.Services.ArgoCD.Password,
+			}); cErr == nil {
+				defer client.Close()
+				apps, _ := client.ListApplications(ctx)
+				for _, app := range apps {
+					_ = client.SyncApplication(ctx, app.Name, grpcclient.SyncOptions{Prune: true})
+				}
+			} else {
+				opts.Log.Warn("argocd gRPC sync failed", zap.Error(cErr))
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")

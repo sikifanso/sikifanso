@@ -196,12 +196,12 @@ func (c *Client) ManagedResources(ctx context.Context, name string) ([]ManagedRe
 			continue
 		}
 		result = append(result, ManagedResource{
-			Group:              item.Group,
-			Kind:               item.Kind,
-			Namespace:          item.Namespace,
-			Name:               item.Name,
-			LiveState:          item.LiveState,
-			TargetState:        item.TargetState,
+			Group:               item.Group,
+			Kind:                item.Kind,
+			Namespace:           item.Namespace,
+			Name:                item.Name,
+			LiveState:           item.LiveState,
+			TargetState:         item.TargetState,
 			NormalizedLiveState: item.NormalizedLiveState,
 		})
 	}

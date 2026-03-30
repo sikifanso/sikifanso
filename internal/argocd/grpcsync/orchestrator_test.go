@@ -7,12 +7,13 @@ import (
 
 func TestRequestDefaults(t *testing.T) {
 	t.Parallel()
-	r := Request{Apps: []string{"foo"}}
-	if r.Timeout == 0 {
-		r.Timeout = DefaultTimeout
-	}
+	r := Request{Timeout: DefaultTimeout}
 	if r.Timeout != 2*time.Minute {
 		t.Fatalf("default timeout = %v, want 2m", r.Timeout)
+	}
+	r.Apps = []string{"foo"}
+	if len(r.Apps) != 1 || r.Apps[0] != "foo" {
+		t.Fatalf("unexpected apps: %v", r.Apps)
 	}
 }
 

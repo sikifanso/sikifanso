@@ -52,7 +52,7 @@ func argocdLogsCmd() *cli.Command {
 			}
 
 			for line := range ch {
-				fmt.Fprintln(os.Stdout, line)
+				_, _ = fmt.Fprintln(os.Stdout, line)
 			}
 			return nil
 		}),

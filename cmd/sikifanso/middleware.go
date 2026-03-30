@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/alicanalbayrak/sikifanso/internal/argocd"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcsync"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
@@ -42,17 +41,6 @@ func withSession(fn func(ctx context.Context, cmd *cli.Command, sess *session.Se
 	})
 }
 
-// syncOptsFromSession builds SyncOpts from a session, reducing the 5-line
-// struct literal that was previously repeated at every call site.
-func syncOptsFromSession(sess *session.Session) argocd.SyncOpts {
-	return argocd.SyncOpts{
-		ClusterName: sess.ClusterName,
-		ArgoURL:     sess.Services.ArgoCD.URL,
-		Username:    sess.Services.ArgoCD.Username,
-		Password:    sess.Services.ArgoCD.Password,
-	}
-}
-
 // waitSyncFlags returns the --no-wait and --timeout flags shared by all mutation commands.
 func waitSyncFlags() []cli.Flag {
 	return []cli.Flag{
@@ -74,20 +62,11 @@ func grpcClientFromSession(ctx context.Context, sess *session.Session) (*grpccli
 }
 
 // syncAfterMutation performs a sync after a mutation command (enable/disable/add/remove).
-// Uses gRPC when available, falling back to the old REST-based sync for older clusters.
 func syncAfterMutation(ctx context.Context, cmd *cli.Command, sess *session.Session, apps ...string) {
-	if sess.Services.ArgoCD.GRPCAddress == "" {
-		// Fallback to old REST-based sync for clusters without gRPC.
-		opts := syncOptsFromSession(sess)
-		argocd.SyncAndReport(ctx, zapLogger, os.Stderr, opts)
-		return
-	}
-
 	client, err := grpcClientFromSession(ctx, sess)
 	if err != nil {
-		zapLogger.Warn("gRPC sync failed, falling back to REST", zap.Error(err))
-		opts := syncOptsFromSession(sess)
-		argocd.SyncAndReport(ctx, zapLogger, os.Stderr, opts)
+		zapLogger.Warn("gRPC sync unavailable", zap.Error(err))
+		fmt.Fprintln(os.Stderr, "ArgoCD sync unavailable — will reconcile on next interval")
 		return
 	}
 	defer client.Close()
@@ -141,16 +120,16 @@ func printSyncResults(w io.Writer, results []grpcsync.Result) {
 			indicator = "~"
 		}
 
-		fmt.Fprintf(w, "  %s %s  sync=%s health=%s\n", indicator, r.App, r.SyncStatus, r.Health)
+		_, _ = fmt.Fprintf(w, "  %s %s  sync=%s health=%s\n", indicator, r.App, r.SyncStatus, r.Health)
 
 		// Print failed resources indented under the app.
 		for _, res := range r.Resources {
 			if res.Health != "" && res.Health != "Healthy" {
-				fmt.Fprintf(w, "      %s/%s  health=%s", res.Kind, res.Name, res.Health)
+				_, _ = fmt.Fprintf(w, "      %s/%s  health=%s", res.Kind, res.Name, res.Health)
 				if res.Message != "" {
-					fmt.Fprintf(w, "  %s", res.Message)
+					_, _ = fmt.Fprintf(w, "  %s", res.Message)
 				}
-				fmt.Fprintln(w)
+				_, _ = fmt.Fprintln(w)
 			}
 		}
 	}

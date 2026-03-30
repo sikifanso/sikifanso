@@ -75,11 +75,11 @@ type ResourceRef struct {
 // ManagedResource describes a single Kubernetes resource managed by an ArgoCD
 // application, together with its live and target state.
 type ManagedResource struct {
-	Group              string
-	Kind               string
-	Namespace          string
-	Name               string
-	LiveState          string
-	TargetState        string
+	Group               string
+	Kind                string
+	Namespace           string
+	Name                string
+	LiveState           string
+	TargetState         string
 	NormalizedLiveState string
 }

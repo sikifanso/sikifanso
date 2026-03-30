@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alicanalbayrak/sikifanso/internal/argocd"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/doctor"
 	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
@@ -92,14 +91,19 @@ func registerDoctorTools(s *mcp.Server, _ *Deps) {
 			return r, sv, e
 		}
 
-		client, err := argocd.NewClient(ctx,
-			sess.Services.ArgoCD.URL,
-			sess.Services.ArgoCD.Username,
-			sess.Services.ArgoCD.Password,
-		)
+		if sess.Services.ArgoCD.GRPCAddress == "" {
+			return errResult(fmt.Errorf("no gRPC address in session — cluster may need recreation"))
+		}
+
+		client, err := grpcclient.NewClient(ctx, grpcclient.Options{
+			Address:  sess.Services.ArgoCD.GRPCAddress,
+			Username: sess.Services.ArgoCD.Username,
+			Password: sess.Services.ArgoCD.Password,
+		})
 		if err != nil {
 			return errResult(fmt.Errorf("connecting to ArgoCD: %w", err))
 		}
+		defer client.Close()
 
 		apps, err := client.ListApplications(ctx)
 		if err != nil {

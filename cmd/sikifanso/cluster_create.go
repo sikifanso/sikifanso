@@ -6,7 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alicanalbayrak/sikifanso/internal/argocd"
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcsync"
 	"github.com/alicanalbayrak/sikifanso/internal/cluster"
 	"github.com/alicanalbayrak/sikifanso/internal/gitops"
 	"github.com/alicanalbayrak/sikifanso/internal/preflight"
@@ -99,7 +100,27 @@ func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
 			return fmt.Errorf("applying profile: %w", err)
 		}
 		// Trigger ArgoCD sync so enabled apps deploy immediately.
-		argocd.SyncAndReport(ctx, zapLogger, os.Stderr, syncOptsFromSession(sess))
+		if sess.Services.ArgoCD.GRPCAddress != "" {
+			if client, err := grpcclient.NewClient(ctx, grpcclient.Options{
+				Address:  sess.Services.ArgoCD.GRPCAddress,
+				Username: sess.Services.ArgoCD.Username,
+				Password: sess.Services.ArgoCD.Password,
+			}); err == nil {
+				defer client.Close()
+				orch := grpcsync.NewOrchestrator(client, zapLogger)
+				listed, _ := client.ListApplications(ctx)
+				var names []string
+				for _, a := range listed {
+					names = append(names, a.Name)
+				}
+				if len(names) > 0 {
+					results, _ := orch.SyncAndWait(ctx, grpcsync.Request{Apps: names, Prune: true})
+					printSyncResults(os.Stderr, results)
+				}
+			} else {
+				zapLogger.Warn("post-profile sync unavailable", zap.Error(err))
+			}
+		}
 	}
 
 	printClusterInfo(sess)

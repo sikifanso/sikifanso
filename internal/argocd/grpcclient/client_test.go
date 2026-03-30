@@ -25,7 +25,7 @@ func TestAppStatusFields(t *testing.T) {
 		SyncStatus: "Synced",
 		Health:     "Healthy",
 	}
-	if s.Name != "test" {
-		t.Fatal("unexpected name")
+	if s.Name != "test" || s.SyncStatus != "Synced" || s.Health != "Healthy" {
+		t.Fatalf("unexpected values: name=%s sync=%s health=%s", s.Name, s.SyncStatus, s.Health)
 	}
 }
