@@ -12,6 +12,7 @@ func argocdCmd() *cli.Command {
 			argocdDiffCmd(),
 			argocdLogsCmd(),
 			argocdRollbackCmd(),
+			argocdProjectsCmd(),
 		},
 	}
 }
