@@ -8,6 +8,10 @@ func argocdCmd() *cli.Command {
 		Usage: "Manage ArgoCD",
 		Commands: []*cli.Command{
 			argocdSyncCmd(),
+			argocdStatusCmd(),
+			argocdDiffCmd(),
+			argocdLogsCmd(),
+			argocdRollbackCmd(),
 		},
 	}
 }
