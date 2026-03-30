@@ -1,5 +1,33 @@
 package grpcclient
 
+// AppSetSummary holds the summary-level information for an ArgoCD ApplicationSet.
+type AppSetSummary struct {
+	Name      string
+	Namespace string
+}
+
+// ProjectSummary holds the summary-level information for an ArgoCD AppProject.
+type ProjectSummary struct {
+	Name         string
+	Description  string
+	Destinations []string
+	Sources      []string
+}
+
+// ProjectSpec holds the specification for creating an ArgoCD AppProject.
+type ProjectSpec struct {
+	Name         string
+	Description  string
+	Destinations []ProjectDestination
+	Sources      []string
+}
+
+// ProjectDestination identifies a cluster and namespace for project deployments.
+type ProjectDestination struct {
+	Server    string
+	Namespace string
+}
+
 // AppStatus holds the summary-level status for an ArgoCD application.
 type AppStatus struct {
 	Name       string
