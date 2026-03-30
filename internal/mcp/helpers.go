@@ -43,11 +43,12 @@ func requireDocker(ctx context.Context) (*mcp.CallToolResult, any, error) {
 
 // triggerSync triggers ArgoCD reconciliation via gRPC.
 func triggerSync(ctx context.Context, _ *Deps, sess *session.Session) error {
-	if sess.Services.ArgoCD.GRPCAddress == "" {
-		return fmt.Errorf("no gRPC address in session — cluster may need recreation")
+	addr, err := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL)
+	if err != nil {
+		return fmt.Errorf("deriving gRPC address: %w", err)
 	}
 	client, err := grpcclient.NewClient(ctx, grpcclient.Options{
-		Address:  sess.Services.ArgoCD.GRPCAddress,
+		Address:  addr,
 		Username: sess.Services.ArgoCD.Username,
 		Password: sess.Services.ArgoCD.Password,
 	})

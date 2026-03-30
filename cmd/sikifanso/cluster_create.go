@@ -100,9 +100,9 @@ func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
 			return fmt.Errorf("applying profile: %w", err)
 		}
 		// Trigger ArgoCD sync so enabled apps deploy immediately.
-		if sess.Services.ArgoCD.GRPCAddress != "" {
+		if addr, addrErr := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL); addrErr == nil {
 			if client, err := grpcclient.NewClient(ctx, grpcclient.Options{
-				Address:  sess.Services.ArgoCD.GRPCAddress,
+				Address:  addr,
 				Username: sess.Services.ArgoCD.Username,
 				Password: sess.Services.ArgoCD.Password,
 			}); err == nil {

@@ -68,9 +68,9 @@ func registerDoctorTools(s *mcp.Server, _ *Deps) {
 		dynClient, err := dynamic.NewForConfig(restCfg)
 		if err == nil {
 			var grpcClient *grpcclient.Client
-			if sess.Services.ArgoCD.GRPCAddress != "" {
+			if addr, addrErr := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL); addrErr == nil {
 				grpcClient, _ = grpcclient.NewClient(ctx, grpcclient.Options{
-					Address:  sess.Services.ArgoCD.GRPCAddress,
+					Address:  addr,
 					Username: sess.Services.ArgoCD.Username,
 					Password: sess.Services.ArgoCD.Password,
 				})
@@ -91,12 +91,13 @@ func registerDoctorTools(s *mcp.Server, _ *Deps) {
 			return r, sv, e
 		}
 
-		if sess.Services.ArgoCD.GRPCAddress == "" {
-			return errResult(fmt.Errorf("no gRPC address in session — cluster may need recreation"))
+		addr, err := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL)
+		if err != nil {
+			return errResult(fmt.Errorf("deriving gRPC address: %w", err))
 		}
 
 		client, err := grpcclient.NewClient(ctx, grpcclient.Options{
-			Address:  sess.Services.ArgoCD.GRPCAddress,
+			Address:  addr,
 			Username: sess.Services.ArgoCD.Username,
 			Password: sess.Services.ArgoCD.Password,
 		})

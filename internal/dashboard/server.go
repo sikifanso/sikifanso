@@ -165,9 +165,9 @@ func handleToggle(opts ServerOpts) http.HandlerFunc {
 		}
 
 		ctx := context.Background()
-		if sess.Services.ArgoCD.GRPCAddress != "" {
+		if addr, addrErr := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL); addrErr == nil {
 			if client, cErr := grpcclient.NewClient(ctx, grpcclient.Options{
-				Address:  sess.Services.ArgoCD.GRPCAddress,
+				Address:  addr,
 				Username: sess.Services.ArgoCD.Username,
 				Password: sess.Services.ArgoCD.Password,
 			}); cErr == nil {
