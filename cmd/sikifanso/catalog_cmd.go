@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcsync"
 	"github.com/alicanalbayrak/sikifanso/internal/catalog"
 	"github.com/alicanalbayrak/sikifanso/internal/gitops"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
@@ -171,11 +172,25 @@ func catalogToggleAction(ctx context.Context, cmd *cli.Command, sess *session.Se
 		return fmt.Errorf("committing change: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "%s %s\n", color.GreenString(name), past)
-	fmt.Fprintln(os.Stderr, "committed to gitops repo")
+	fmt.Fprintf(os.Stderr, "%s  committed to gitops repo\n", name)
 
-	syncAfterMutation(ctx, cmd, sess, name)
+	// Determine operation.
+	op := grpcsync.OpEnable
+	if !enable {
+		op = grpcsync.OpDisable
+	}
 
+	// Sync and wait.
+	if err := syncAfterMutation(ctx, cmd, sess, MutationOpts{
+		Operation:  op,
+		Apps:       []string{name},
+		AppSetName: "catalog",
+	}); err != nil {
+		return err
+	}
+
+	// Print final success AFTER sync confirms.
+	fmt.Fprintf(os.Stderr, "%s %s ✓\n", color.GreenString(name), past)
 	return nil
 }
 

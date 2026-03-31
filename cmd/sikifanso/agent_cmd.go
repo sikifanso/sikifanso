@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/alicanalbayrak/sikifanso/internal/agent"
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcsync"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v3"
@@ -51,7 +52,13 @@ func agentCreateCmd() *cli.Command {
 			fmt.Fprintf(os.Stderr, "%s created (namespace: agent-%s)\n", color.GreenString(name), name)
 			fmt.Fprintln(os.Stderr, "committed to gitops repo")
 
-			syncAfterMutation(ctx, cmd, sess, name)
+			if err := syncAfterMutation(ctx, cmd, sess, MutationOpts{
+				Operation:  grpcsync.OpEnable,
+				Apps:       []string{name},
+				AppSetName: "agents",
+			}); err != nil {
+				return err
+			}
 			return nil
 		}),
 	}
@@ -113,7 +120,13 @@ func agentDeleteCmd() *cli.Command {
 			fmt.Fprintf(os.Stderr, "%s deleted\n", color.GreenString(name))
 			fmt.Fprintln(os.Stderr, "committed to gitops repo")
 
-			syncAfterMutation(ctx, cmd, sess, name)
+			if err := syncAfterMutation(ctx, cmd, sess, MutationOpts{
+				Operation:  grpcsync.OpDisable,
+				Apps:       []string{name},
+				AppSetName: "agents",
+			}); err != nil {
+				return err
+			}
 			return nil
 		}),
 	}

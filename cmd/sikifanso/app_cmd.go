@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/alicanalbayrak/sikifanso/internal/app"
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcsync"
 	"github.com/alicanalbayrak/sikifanso/internal/catalog"
 	"github.com/alicanalbayrak/sikifanso/internal/gitops"
 	"github.com/alicanalbayrak/sikifanso/internal/prompt"
@@ -125,7 +126,13 @@ func appAddAction(ctx context.Context, cmd *cli.Command, sess *session.Session) 
 		fmt.Fprintf(os.Stderr, "%s toggled: %s\n", color.GreenString("catalog"), strings.Join(names, ", "))
 		fmt.Fprintln(os.Stderr, "committed to gitops repo")
 
-		syncAfterMutation(ctx, cmd, sess, names...)
+		if err := syncAfterMutation(ctx, cmd, sess, MutationOpts{
+			Operation:  grpcsync.OpEnable,
+			Apps:       names,
+			AppSetName: "catalog",
+		}); err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -176,7 +183,13 @@ func appAddAction(ctx context.Context, cmd *cli.Command, sess *session.Session) 
 
 	fmt.Fprintf(os.Stderr, "%s added to gitops repo\n", color.GreenString(name))
 
-	syncAfterMutation(ctx, cmd, sess, name)
+	if err := syncAfterMutation(ctx, cmd, sess, MutationOpts{
+		Operation:  grpcsync.OpEnable,
+		Apps:       []string{name},
+		AppSetName: "root",
+	}); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -253,7 +266,13 @@ func appRemoveAction(ctx context.Context, cmd *cli.Command, sess *session.Sessio
 
 	fmt.Fprintf(os.Stderr, "%s removed from gitops repo\n", color.GreenString(name))
 
-	syncAfterMutation(ctx, cmd, sess, name)
+	if err := syncAfterMutation(ctx, cmd, sess, MutationOpts{
+		Operation:  grpcsync.OpDisable,
+		Apps:       []string{name},
+		AppSetName: "root",
+	}); err != nil {
+		return err
+	}
 
 	return nil
 }

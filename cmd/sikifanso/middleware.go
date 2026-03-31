@@ -7,8 +7,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/appsetreconcile"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcsync"
+	"github.com/alicanalbayrak/sikifanso/internal/kube"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
@@ -50,71 +52,98 @@ func waitSyncFlags() []cli.Flag {
 }
 
 // grpcClientFromSession creates a gRPC client from session credentials.
+// ArgoCD multiplexes gRPC and HTTP on the same port via CMux, so the
+// gRPC address is derived from the HTTP URL.
 func grpcClientFromSession(ctx context.Context, sess *session.Session) (*grpcclient.Client, error) {
-	if sess.Services.ArgoCD.GRPCAddress == "" {
-		return nil, fmt.Errorf("no gRPC address in session — cluster may need recreation")
+	addr, err := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL)
+	if err != nil {
+		return nil, err
 	}
 	return grpcclient.NewClient(ctx, grpcclient.Options{
-		Address:  sess.Services.ArgoCD.GRPCAddress,
+		Address:  addr,
 		Username: sess.Services.ArgoCD.Username,
 		Password: sess.Services.ArgoCD.Password,
 	})
 }
 
+// MutationOpts describes the sync behaviour after a mutation command.
+type MutationOpts struct {
+	Operation  grpcsync.OperationType
+	Apps       []string
+	AppSetName string // "catalog", "root", "agents"
+}
+
 // syncAfterMutation performs a sync after a mutation command (enable/disable/add/remove).
-func syncAfterMutation(ctx context.Context, cmd *cli.Command, sess *session.Session, apps ...string) {
-	client, err := grpcClientFromSession(ctx, sess)
+func syncAfterMutation(ctx context.Context, cmd *cli.Command, sess *session.Session, opts MutationOpts) error {
+	// 1. Create gRPC client for app status.
+	grpcClient, err := grpcClientFromSession(ctx, sess)
 	if err != nil {
-		zapLogger.Warn("gRPC sync unavailable", zap.Error(err))
+		zapLogger.Warn("gRPC unavailable", zap.Error(err))
 		fmt.Fprintln(os.Stderr, "ArgoCD sync unavailable — will reconcile on next interval")
-		return
+		return nil
 	}
-	defer client.Close()
+	defer grpcClient.Close()
 
-	orch := grpcsync.NewOrchestrator(client, zapLogger)
+	// 2. Create k8s reconciler for AppSet annotation patching.
+	restCfg, err := kube.RESTConfigForCluster(sess.ClusterName)
+	if err != nil {
+		return fmt.Errorf("k8s client: %w", err)
+	}
+	reconciler, err := appsetreconcile.NewReconciler(restCfg, "argocd")
+	if err != nil {
+		return fmt.Errorf("reconciler: %w", err)
+	}
+
+	// 3. Build request.
+	orch := grpcsync.NewOrchestrator(grpcClient, zapLogger)
 	req := grpcsync.Request{
-		Apps:    apps,
-		Timeout: cmd.Duration("timeout"),
-		Prune:   true,
+		Apps:      opts.Apps,
+		Timeout:   cmd.Duration("timeout"),
+		Prune:     true,
+		Operation: opts.Operation,
+		ReconcileFn: func(ctx context.Context) error {
+			return reconciler.Trigger(ctx, opts.AppSetName)
+		},
+		OnProgress: func(app, status, detail string) {
+			fmt.Fprintf(os.Stderr, "  %s  %s", app, status)
+			if detail != "" {
+				fmt.Fprintf(os.Stderr, "  %s", detail)
+			}
+			fmt.Fprintln(os.Stderr)
+		},
 	}
 
-	// If no specific apps were given, list all apps to sync.
-	if len(req.Apps) == 0 {
-		listed, listErr := client.ListApplications(ctx)
-		if listErr != nil {
-			zapLogger.Warn("listing apps for sync failed", zap.Error(listErr))
-			fmt.Fprintln(os.Stderr, "ArgoCD sync: could not list apps")
-			return
-		}
-		for _, a := range listed {
-			req.Apps = append(req.Apps, a.Name)
-		}
-	}
-
+	// 4. No-wait mode.
 	if cmd.Bool("no-wait") {
-		if err := orch.SyncOnly(ctx, req); err != nil {
-			zapLogger.Warn("sync trigger failed", zap.Error(err))
+		if req.ReconcileFn != nil && (opts.Operation == grpcsync.OpEnable || opts.Operation == grpcsync.OpDisable) {
+			if err := req.ReconcileFn(ctx); err != nil {
+				return err
+			}
 		}
-		fmt.Fprintln(os.Stderr, "ArgoCD sync triggered")
-		return
+		fmt.Fprintln(os.Stderr, "  ApplicationSet reconciliation triggered")
+		return nil
 	}
 
+	// 5. Wait mode.
 	results, exitCode := orch.SyncAndWait(ctx, req)
 	printSyncResults(os.Stderr, results)
 
 	switch exitCode {
 	case grpcsync.ExitFailure:
-		fmt.Fprintln(os.Stderr, "sync failed: one or more apps unhealthy")
+		return fmt.Errorf("sync failed: one or more apps unhealthy")
 	case grpcsync.ExitTimeout:
-		fmt.Fprintln(os.Stderr, "sync timed out: apps may still be reconciling")
+		return fmt.Errorf("sync timed out: apps may still be reconciling")
 	}
+	return nil
 }
 
 // printSyncResults writes a human-readable summary of sync results.
 func printSyncResults(w io.Writer, results []grpcsync.Result) {
 	for _, r := range results {
 		indicator := "✓"
-		if r.Health == "Degraded" || r.Health == "Missing" {
+		if r.Deleted {
+			indicator = "✓"
+		} else if r.Health == "Degraded" || r.Health == "Missing" {
 			indicator = "✗"
 		} else if r.SyncStatus != "Synced" || r.Health != "Healthy" {
 			indicator = "~"
