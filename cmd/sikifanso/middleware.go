@@ -7,6 +7,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/briandowns/spinner"
+
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/appsetreconcile"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcsync"
@@ -94,7 +96,9 @@ func syncAfterMutation(ctx context.Context, cmd *cli.Command, sess *session.Sess
 		return fmt.Errorf("reconciler: %w", err)
 	}
 
-	// 3. Build request.
+	// 3. Build request with spinner for progress feedback.
+	s := spinner.New(spinner.CharSets[11], 120*time.Millisecond, spinner.WithWriter(os.Stderr))
+
 	orch := grpcsync.NewOrchestrator(grpcClient, zapLogger)
 	req := grpcsync.Request{
 		Apps:      opts.Apps,
@@ -105,11 +109,11 @@ func syncAfterMutation(ctx context.Context, cmd *cli.Command, sess *session.Sess
 			return reconciler.Trigger(ctx, opts.AppSetName)
 		},
 		OnProgress: func(app, status, detail string) {
-			fmt.Fprintf(os.Stderr, "  %s  %s", app, status)
+			suffix := fmt.Sprintf(" %s  %s", app, status)
 			if detail != "" {
-				fmt.Fprintf(os.Stderr, "  %s", detail)
+				suffix += "  " + detail
 			}
-			fmt.Fprintln(os.Stderr)
+			s.Suffix = suffix
 		},
 	}
 
@@ -124,8 +128,10 @@ func syncAfterMutation(ctx context.Context, cmd *cli.Command, sess *session.Sess
 		return nil
 	}
 
-	// 5. Wait mode.
+	// 5. Wait mode with spinner.
+	s.Start()
 	results, exitCode := orch.SyncAndWait(ctx, req)
+	s.Stop()
 	printSyncResults(os.Stderr, results)
 
 	switch exitCode {

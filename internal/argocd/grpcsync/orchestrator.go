@@ -238,7 +238,12 @@ func (o *Orchestrator) waitForAppear(ctx context.Context, name string, req Reque
 		break
 	}
 
-	// App exists, now watch for Synced+Healthy.
+	// App exists — kick off a sync to avoid waiting for ArgoCD's auto-sync interval.
+	if err := o.client.SyncApplication(ctx, name, grpcclient.SyncOptions{Prune: req.Prune}); err != nil {
+		o.log.Debug("sync trigger after appear failed (may already be syncing)", zap.String("app", name), zap.Error(err))
+	}
+
+	// Now watch for Synced+Healthy.
 	o.watchSingleApp(ctx, name, req, updateFn)
 }
 
