@@ -31,7 +31,7 @@ type Request struct {
 	Prune         bool
 	SkipUnhealthy bool
 	Operation     OperationType
-	OnProgress    ProgressFn                     // optional, called on each state change
+	OnProgress    ProgressFn                      // optional, called on each state change
 	ReconcileFn   func(ctx context.Context) error // triggers AppSet reconciliation
 }
 

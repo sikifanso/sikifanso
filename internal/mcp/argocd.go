@@ -21,6 +21,10 @@ type argocdRollbackInput struct {
 	Revision int64  `json:"revision" jsonschema:"Revision ID to rollback to"`
 }
 
+type argocdProjectsInput struct {
+	Cluster string `json:"cluster" jsonschema:"Name of the cluster"`
+}
+
 // grpcClientFromMCPSession creates a gRPC client from session credentials.
 // The gRPC address is derived from the ArgoCD HTTP URL — ArgoCD multiplexes
 // gRPC and HTTP on the same port.
@@ -37,6 +41,13 @@ func grpcClientFromMCPSession(ctx context.Context, sess *session.Session) (*grpc
 }
 
 func registerArgoCDTools(s *mcp.Server, _ *Deps) {
+	registerArgoCDAppDetailTool(s)
+	registerArgoCDAppDiffTool(s)
+	registerArgoCDRollbackTool(s)
+	registerArgoCDProjectTools(s)
+}
+
+func registerArgoCDAppDetailTool(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "argocd_app_detail",
 		Description: "Get detailed status and resource tree for an ArgoCD application",
@@ -90,7 +101,9 @@ func registerArgoCDTools(s *mcp.Server, _ *Deps) {
 
 		return textResult(sb.String())
 	})
+}
 
+func registerArgoCDAppDiffTool(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "argocd_app_diff",
 		Description: "Show diff between live and desired state for an ArgoCD application",
@@ -142,7 +155,9 @@ func registerArgoCDTools(s *mcp.Server, _ *Deps) {
 
 		return textResult(sb.String())
 	})
+}
 
+func registerArgoCDRollbackTool(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "argocd_rollback",
 		Description: "Roll back an ArgoCD application to a previous revision",
@@ -164,11 +179,9 @@ func registerArgoCDTools(s *mcp.Server, _ *Deps) {
 
 		return textResult(fmt.Sprintf("Application %q rolled back to revision %d.", input.Name, input.Revision))
 	})
+}
 
-	type argocdProjectsInput struct {
-		Cluster string `json:"cluster" jsonschema:"Name of the cluster"`
-	}
-
+func registerArgoCDProjectTools(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "argocd_projects_list",
 		Description: "List all ArgoCD projects in the cluster",

@@ -85,7 +85,7 @@ func isTerminal() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
-func appAddAction(ctx context.Context, cmd *cli.Command, sess *session.Session) error {
+func appAddAction(ctx context.Context, cmd *cli.Command, sess *session.Session) error { //nolint:gocyclo // interactive flow with multiple input paths
 	// If no args and no flags set and stdin is a TTY, launch interactive catalog browser.
 	if cmd.Args().Len() == 0 && !cmd.IsSet("repo") && !cmd.IsSet("chart") && isTerminal() {
 		entries, err := catalog.List(sess.GitOpsPath)

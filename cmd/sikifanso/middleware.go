@@ -152,13 +152,16 @@ func syncAfterMutation(ctx context.Context, cmd *cli.Command, sess *session.Sess
 // printSyncResults writes a human-readable summary of sync results.
 func printSyncResults(w io.Writer, results []grpcsync.Result) {
 	for _, r := range results {
-		indicator := "✓"
-		if r.Deleted {
+		var indicator string
+		switch {
+		case r.Deleted:
 			indicator = "✓"
-		} else if r.Health == "Degraded" || r.Health == "Missing" {
+		case r.Health == "Degraded" || r.Health == "Missing":
 			indicator = "✗"
-		} else if r.SyncStatus != "Synced" || r.Health != "Healthy" {
+		case r.SyncStatus != "Synced" || r.Health != "Healthy":
 			indicator = "~"
+		default:
+			indicator = "✓"
 		}
 
 		_, _ = fmt.Fprintf(w, "  %s %s  sync=%s health=%s\n", indicator, r.App, r.SyncStatus, r.Health)

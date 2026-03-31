@@ -205,7 +205,7 @@ func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, req Requ
 				updateFn(r)
 				return
 
-			// If Degraded but still OutOfSync, keep waiting — sync hasn't finished.
+				// If Degraded but still OutOfSync, keep waiting — sync hasn't finished.
 			}
 		}
 	}
