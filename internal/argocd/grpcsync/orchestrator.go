@@ -2,7 +2,9 @@ package grpcsync
 
 import (
 	"context"
+	"strings"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -22,27 +24,45 @@ func NewOrchestrator(client *grpcclient.Client, log *zap.Logger) *Orchestrator {
 }
 
 // SyncAndWait triggers a sync for every app in req, then watches until all apps
-// reach Synced+Healthy (or the timeout expires).
+// reach Synced+Healthy (or the timeout expires). The behaviour varies based on
+// req.Operation:
+//   - OpSync: trigger SyncApplication, watch for Synced+Healthy
+//   - OpEnable: trigger AppSet reconciliation, wait for app to appear, then Synced+Healthy
+//   - OpDisable: trigger AppSet reconciliation, wait for app deletion
 func (o *Orchestrator) SyncAndWait(ctx context.Context, req Request) ([]Result, ExitCode) {
 	if req.Timeout == 0 {
 		req.Timeout = DefaultTimeout
 	}
-	// Default prune to true when not explicitly set to false by the caller.
-	// Because the zero value of bool is false we rely on the caller to pass
-	// Prune: true explicitly, but the spec says "default prune to true".
 	req.Prune = true
 
 	ctx, cancel := context.WithTimeout(ctx, req.Timeout)
 	defer cancel()
 
-	// Trigger sync for all apps first.
-	for _, app := range req.Apps {
-		if err := o.client.SyncApplication(ctx, app, grpcclient.SyncOptions{Prune: req.Prune}); err != nil {
-			o.log.Warn("sync trigger failed", zap.String("app", app), zap.Error(err))
+	switch req.Operation {
+	case OpEnable:
+		if req.ReconcileFn != nil {
+			if err := req.ReconcileFn(ctx); err != nil {
+				o.log.Warn("AppSet reconciliation failed", zap.Error(err))
+			}
 		}
-	}
+		return o.watchApps(ctx, req, o.waitForAppear)
 
-	return o.watchApps(ctx, req)
+	case OpDisable:
+		if req.ReconcileFn != nil {
+			if err := req.ReconcileFn(ctx); err != nil {
+				o.log.Warn("AppSet reconciliation failed", zap.Error(err))
+			}
+		}
+		return o.watchApps(ctx, req, o.waitForDisappear)
+
+	default: // OpSync
+		for _, app := range req.Apps {
+			if err := o.client.SyncApplication(ctx, app, grpcclient.SyncOptions{Prune: req.Prune}); err != nil {
+				o.log.Warn("sync trigger failed", zap.String("app", app), zap.Error(err))
+			}
+		}
+		return o.watchApps(ctx, req, o.watchSingleApp)
+	}
 }
 
 // SyncOnly triggers a sync for every app in req and returns the first error encountered.
@@ -55,9 +75,12 @@ func (o *Orchestrator) SyncOnly(ctx context.Context, req Request) error {
 	return nil
 }
 
-// watchApps watches all apps concurrently and returns their results plus a
-// composite ExitCode once all goroutines have finished.
-func (o *Orchestrator) watchApps(ctx context.Context, req Request) ([]Result, ExitCode) {
+// watchFn is the per-app strategy used by watchApps.
+type watchFn func(ctx context.Context, name string, req Request, updateFn func(Result))
+
+// watchApps watches all apps concurrently using the given per-app strategy and
+// returns their results plus a composite ExitCode once all goroutines have finished.
+func (o *Orchestrator) watchApps(ctx context.Context, req Request, fn watchFn) ([]Result, ExitCode) {
 	type entry struct {
 		idx int
 		res Result
@@ -76,8 +99,18 @@ func (o *Orchestrator) watchApps(ctx context.Context, req Request) ([]Result, Ex
 		go func(idx int, appName string) {
 			defer wg.Done()
 			var latest Result
-			update := func(r Result) { latest = r }
-			o.watchSingleApp(ctx, appName, req.SkipUnhealthy, update)
+			update := func(r Result) {
+				latest = r
+				if req.OnProgress != nil {
+					detail := r.Message
+					status := r.SyncStatus + "/" + r.Health
+					if r.Deleted {
+						status = "Deleted"
+					}
+					req.OnProgress(appName, status, detail)
+				}
+			}
+			fn(ctx, appName, req, update)
 			ch <- entry{idx: idx, res: latest}
 		}(i, name)
 	}
@@ -95,14 +128,15 @@ func (o *Orchestrator) watchApps(ctx context.Context, req Request) ([]Result, Ex
 	code := ExitSuccess
 	for _, r := range results {
 		switch {
+		case r.Deleted:
+			// Successful deletion — keep ExitSuccess.
 		case r.SyncStatus == "Synced" && r.Health == "Healthy":
-			// good — keep ExitSuccess unless already elevated
+			// good
 		case r.Health == "Degraded" || r.Health == "Missing":
 			if code < ExitFailure {
 				code = ExitFailure
 			}
 		default:
-			// Still Progressing or unknown — treat as timeout if nothing worse.
 			if code < ExitTimeout {
 				code = ExitTimeout
 			}
@@ -115,7 +149,10 @@ func (o *Orchestrator) watchApps(ctx context.Context, req Request) ([]Result, Ex
 // watchSingleApp opens a Watch stream for appName and calls updateFn on every
 // event until the app reaches a terminal state or ctx is cancelled.
 // On stream error it falls back to a single pollOnce call.
-func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, skipUnhealthy bool, updateFn func(Result)) {
+// FIX: Don't exit on Degraded immediately. Only exit on Degraded if the app is
+// also Synced (meaning the sync completed but the app is broken). If the app is
+// OutOfSync+Degraded, keep waiting.
+func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, req Request, updateFn func(Result)) {
 	eventCh, err := o.client.WatchApplication(ctx, name)
 	if err != nil {
 		o.log.Warn("watch failed, falling back to poll", zap.String("app", name), zap.Error(err))
@@ -130,7 +167,6 @@ func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, skipUnhe
 
 		case event, ok := <-eventCh:
 			if !ok {
-				// Stream closed unexpectedly — fall back to a poll.
 				o.pollOnce(ctx, name, updateFn)
 				return
 			}
@@ -140,6 +176,7 @@ func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, skipUnhe
 					App:        name,
 					SyncStatus: "Deleted",
 					Health:     "Deleted",
+					Deleted:    true,
 				})
 				return
 			}
@@ -156,8 +193,8 @@ func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, skipUnhe
 			case event.App.SyncStatus == "Synced" && event.App.Health == "Healthy":
 				return
 
-			case event.App.Health == "Degraded" && !skipUnhealthy:
-				// Fetch the resource tree to enrich the result with details.
+			case event.App.Health == "Degraded" && event.App.SyncStatus == "Synced" && !req.SkipUnhealthy:
+				// Sync completed but app is broken — fetch resource details and exit.
 				tree, treeErr := o.client.ResourceTree(ctx, name)
 				if treeErr != nil {
 					o.log.Warn("resource tree fetch failed",
@@ -167,7 +204,111 @@ func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, skipUnhe
 				}
 				updateFn(r)
 				return
+
+			// If Degraded but still OutOfSync, keep waiting — sync hasn't finished.
 			}
+		}
+	}
+}
+
+// waitForAppear polls for the app to exist, then watches for Synced+Healthy.
+func (o *Orchestrator) waitForAppear(ctx context.Context, name string, req Request, updateFn func(Result)) {
+	ticker := time.NewTicker(DefaultPollInterval)
+	defer ticker.Stop()
+
+	// Poll until the app exists.
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+
+		_, err := o.client.GetApplication(ctx, name)
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				updateFn(Result{App: name, SyncStatus: "Waiting", Health: "Waiting", Message: "waiting for app to appear"})
+				continue
+			}
+			o.log.Warn("GetApplication failed during waitForAppear", zap.String("app", name), zap.Error(err))
+			continue
+		}
+
+		// App exists — switch to watch.
+		break
+	}
+
+	// App exists, now watch for Synced+Healthy.
+	o.watchSingleApp(ctx, name, req, updateFn)
+}
+
+// waitForDisappear watches until the app is deleted or times out.
+func (o *Orchestrator) waitForDisappear(ctx context.Context, name string, _ Request, updateFn func(Result)) {
+	// Check if already gone.
+	_, err := o.client.GetApplication(ctx, name)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			updateFn(Result{App: name, SyncStatus: "Deleted", Health: "Deleted", Deleted: true})
+			return
+		}
+		o.log.Warn("GetApplication failed during waitForDisappear", zap.String("app", name), zap.Error(err))
+	}
+
+	// Open watch stream and wait for deletion.
+	eventCh, err := o.client.WatchApplication(ctx, name)
+	if err != nil {
+		o.log.Warn("watch failed during waitForDisappear, falling back to poll", zap.String("app", name), zap.Error(err))
+		o.pollUntilGone(ctx, name, updateFn)
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case event, ok := <-eventCh:
+			if !ok {
+				// Stream closed — poll to check if gone.
+				o.pollUntilGone(ctx, name, updateFn)
+				return
+			}
+
+			if event.Deleted {
+				updateFn(Result{App: name, SyncStatus: "Deleted", Health: "Deleted", Deleted: true})
+				return
+			}
+
+			// Ignore all health transitions — only terminal state is Deleted.
+			updateFn(Result{
+				App:        name,
+				SyncStatus: event.App.SyncStatus,
+				Health:     event.App.Health,
+				Message:    "waiting for deletion",
+			})
+		}
+	}
+}
+
+// pollUntilGone polls GetApplication until the app is not found.
+func (o *Orchestrator) pollUntilGone(ctx context.Context, name string, updateFn func(Result)) {
+	ticker := time.NewTicker(DefaultPollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+
+		_, err := o.client.GetApplication(ctx, name)
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				updateFn(Result{App: name, SyncStatus: "Deleted", Health: "Deleted", Deleted: true})
+				return
+			}
+			o.log.Warn("poll failed during waitForDisappear", zap.String("app", name), zap.Error(err))
 		}
 	}
 }
