@@ -97,7 +97,7 @@ func registerAgentTools(s *mcp.Server, deps *Deps) {
 		}
 
 		result := fmt.Sprintf("Agent %q created (namespace: agent-%s).\nCommitted to gitops repo.", input.Name, input.Name)
-		return textResult(appendSyncStatus(ctx, deps, sess, result))
+		return textResult(appendSyncStatus(ctx, deps, sess, result, "agents"))
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -114,6 +114,6 @@ func registerAgentTools(s *mcp.Server, deps *Deps) {
 		}
 
 		result := fmt.Sprintf("Agent %q deleted.\nCommitted to gitops repo.", input.Name)
-		return textResult(appendSyncStatus(ctx, deps, sess, result))
+		return textResult(appendSyncStatus(ctx, deps, sess, result, "agents"))
 	})
 }

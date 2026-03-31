@@ -132,5 +132,5 @@ func catalogToggle(ctx context.Context, deps *Deps, clusterName, appName string,
 	}
 
 	result := fmt.Sprintf("%s %s and committed to gitops repo.", appName, past)
-	return textResult(appendSyncStatus(ctx, deps, sess, result))
+	return textResult(appendSyncStatus(ctx, deps, sess, result, "catalog"))
 }

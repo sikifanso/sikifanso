@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/appsetreconcile"
 	"github.com/alicanalbayrak/sikifanso/internal/kube"
 	"github.com/alicanalbayrak/sikifanso/internal/preflight"
 	"github.com/alicanalbayrak/sikifanso/internal/profile"
@@ -41,38 +41,28 @@ func requireDocker(ctx context.Context) (*mcp.CallToolResult, any, error) {
 	return nil, nil, nil
 }
 
-// triggerSync triggers ArgoCD reconciliation via gRPC.
-func triggerSync(ctx context.Context, _ *Deps, sess *session.Session) error {
-	addr, err := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL)
+// triggerSync triggers ArgoCD ApplicationSet reconciliation via the refresh
+// annotation. This replaces the old approach of listing and syncing individual
+// apps via gRPC.
+func triggerSync(ctx context.Context, _ *Deps, sess *session.Session, appSetNames ...string) error {
+	restCfg, err := kube.RESTConfigForCluster(sess.ClusterName)
 	if err != nil {
-		return fmt.Errorf("deriving gRPC address: %w", err)
+		return fmt.Errorf("k8s config: %w", err)
 	}
-	client, err := grpcclient.NewClient(ctx, grpcclient.Options{
-		Address:  addr,
-		Username: sess.Services.ArgoCD.Username,
-		Password: sess.Services.ArgoCD.Password,
-	})
+	reconciler, err := appsetreconcile.NewReconciler(restCfg, "argocd")
 	if err != nil {
-		return fmt.Errorf("gRPC client: %w", err)
+		return fmt.Errorf("reconciler: %w", err)
 	}
-	defer client.Close()
-
-	apps, err := client.ListApplications(ctx)
-	if err != nil {
-		return fmt.Errorf("listing apps for sync: %w", err)
-	}
-	for _, app := range apps {
-		_ = client.SyncApplication(ctx, app.Name, grpcclient.SyncOptions{Prune: true})
-	}
-	return nil
+	return reconciler.Trigger(ctx, appSetNames...)
 }
 
-// appendSyncStatus triggers an ArgoCD sync and appends the outcome to the result string.
-func appendSyncStatus(ctx context.Context, deps *Deps, sess *session.Session, result string) string {
-	if syncErr := triggerSync(ctx, deps, sess); syncErr != nil {
+// appendSyncStatus triggers an ArgoCD ApplicationSet reconciliation and appends
+// the outcome to the result string.
+func appendSyncStatus(ctx context.Context, deps *Deps, sess *session.Session, result string, appSetNames ...string) string {
+	if syncErr := triggerSync(ctx, deps, sess, appSetNames...); syncErr != nil {
 		return result + fmt.Sprintf("\nSync trigger warning: %v", syncErr)
 	}
-	return result + "\nArgoCD sync triggered."
+	return result + "\nArgoCD reconciliation triggered."
 }
 
 // applyProfileToCluster resolves and applies a profile, then triggers sync.
@@ -94,5 +84,5 @@ func applyProfileToCluster(ctx context.Context, deps *Deps, sess *session.Sessio
 		result += fmt.Sprintf("\n  Warning: %s", w)
 	}
 
-	return appendSyncStatus(ctx, deps, sess, result), nil
+	return appendSyncStatus(ctx, deps, sess, result, "catalog"), nil
 }
