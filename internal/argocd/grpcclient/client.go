@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 
 	"go.uber.org/zap"
 
@@ -16,9 +17,20 @@ import (
 
 // Options configures the gRPC connection to an ArgoCD server.
 type Options struct {
-	Address  string // host:port, e.g. "localhost:30084"
+	Address  string // host:port for gRPC — ArgoCD multiplexes gRPC on the same port as HTTP
 	Username string
 	Password string
+}
+
+// AddressFromURL extracts host:port from an HTTP URL. ArgoCD multiplexes gRPC
+// and HTTP on the same port via CMux, so the gRPC address is the same as the
+// HTTP URL's host:port.
+func AddressFromURL(rawURL string) (string, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("parsing ArgoCD URL: %w", err)
+	}
+	return u.Host, nil
 }
 
 // Client wraps the ArgoCD gRPC API via the official SDK.

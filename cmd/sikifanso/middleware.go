@@ -136,9 +136,15 @@ func syncAfterMutation(ctx context.Context, cmd *cli.Command, sess *session.Sess
 
 	switch exitCode {
 	case grpcsync.ExitFailure:
+		if opts.Operation == grpcsync.OpDisable {
+			return fmt.Errorf("disable incomplete: Application deletion still in progress (resources may have long termination grace periods — try a longer --timeout)")
+		}
 		return fmt.Errorf("sync failed: one or more apps unhealthy")
 	case grpcsync.ExitTimeout:
-		return fmt.Errorf("sync timed out: apps may still be reconciling")
+		if opts.Operation == grpcsync.OpDisable {
+			return fmt.Errorf("disable timed out: Application deletion still in progress (try --timeout 10m)")
+		}
+		return fmt.Errorf("sync timed out: apps may still be reconciling (try a longer --timeout)")
 	}
 	return nil
 }
