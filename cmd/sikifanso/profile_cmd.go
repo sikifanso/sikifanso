@@ -2,12 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
 
 	"github.com/alicanalbayrak/sikifanso/internal/profile"
-	"github.com/fatih/color"
 	"github.com/urfave/cli/v3"
 )
 
@@ -31,22 +29,12 @@ func profileListCmd() *cli.Command {
 				return nil
 			}
 
-			bold := color.New(color.Bold).SprintFunc()
-			dim := color.New(color.FgHiBlack).SprintFunc()
-
-			fmt.Fprintf(os.Stderr, "%s  %s  %s\n",
-				bold(fmt.Sprintf("%-16s", "NAME")),
-				bold(fmt.Sprintf("%-60s", "DESCRIPTION")),
-				bold("APPS"),
-			)
-
+			headers := []string{"NAME", "DESCRIPTION", "APPS"}
+			rows := make([][]string, 0, len(profiles))
 			for _, p := range profiles {
-				fmt.Fprintf(os.Stderr, "%-16s  %-60s  %s\n",
-					p.Name,
-					p.Description,
-					dim(strings.Join(p.Apps, ", ")),
-				)
+				rows = append(rows, []string{p.Name, p.Description, strings.Join(p.Apps, ", ")})
 			}
+			printTable(os.Stderr, headers, rows)
 			return nil
 		},
 	}

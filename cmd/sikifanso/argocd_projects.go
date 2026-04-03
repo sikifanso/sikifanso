@@ -58,15 +58,16 @@ func argocdProjectsListCmd() *cli.Command {
 				return nil
 			}
 
-			fmt.Fprintf(os.Stderr, "%-30s  %s\n", "NAME", "DESCRIPTION")
-			fmt.Fprintf(os.Stderr, "%-30s  %s\n", "----", "-----------")
+			headers := []string{"NAME", "DESCRIPTION"}
+			rows := make([][]string, 0, len(projects))
 			for _, p := range projects {
 				desc := p.Description
 				if desc == "" {
 					desc = "-"
 				}
-				fmt.Fprintf(os.Stderr, "%-30s  %s\n", p.Name, desc)
+				rows = append(rows, []string{p.Name, desc})
 			}
+			printTable(os.Stderr, headers, rows)
 			return nil
 		}),
 	}

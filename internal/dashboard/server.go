@@ -9,9 +9,9 @@ import (
 	"io/fs"
 	"net/http"
 
-	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/appsetreconcile"
 	"github.com/alicanalbayrak/sikifanso/internal/catalog"
-	"github.com/alicanalbayrak/sikifanso/internal/gitops"
+	"github.com/alicanalbayrak/sikifanso/internal/kube"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
 	"go.uber.org/zap"
 )
@@ -140,48 +140,27 @@ func handleToggle(opts ServerOpts) http.HandlerFunc {
 			return
 		}
 
-		entry, err := catalog.Find(sess.GitOpsPath, name)
+		result, err := catalog.Flip(sess.GitOpsPath, name)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
-		}
-
-		newEnabled := !entry.Enabled
-		if err := catalog.SetEnabled(sess.GitOpsPath, name, newEnabled); err != nil {
 			opts.Log.Error("toggling app", zap.String("app", name), zap.Error(err))
 			http.Error(w, "failed to toggle app", http.StatusInternalServerError)
 			return
 		}
 
-		verb := "enable"
-		if !newEnabled {
-			verb = "disable"
-		}
-		commitPath := fmt.Sprintf("catalog/%s.yaml", name)
-		if err := gitops.Commit(sess.GitOpsPath, fmt.Sprintf("catalog: %s %s", verb, name), commitPath); err != nil {
-			opts.Log.Error("committing toggle", zap.String("app", name), zap.Error(err))
-			http.Error(w, "failed to commit change", http.StatusInternalServerError)
-			return
-		}
-
-		ctx := context.Background()
-		if addr, addrErr := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL); addrErr == nil {
-			if client, cErr := grpcclient.NewClient(ctx, grpcclient.Options{
-				Address:  addr,
-				Username: sess.Services.ArgoCD.Username,
-				Password: sess.Services.ArgoCD.Password,
-			}); cErr == nil {
-				defer client.Close()
-				apps, _ := client.ListApplications(ctx)
-				for _, app := range apps {
-					_ = client.SyncApplication(ctx, app.Name, grpcclient.SyncOptions{Prune: true})
+		// Trigger ArgoCD ApplicationSet reconciliation (fire-and-forget).
+		if !result.NoChange {
+			ctx := context.Background()
+			restCfg, restErr := kube.RESTConfigForCluster(sess.ClusterName)
+			if restErr == nil {
+				if reconciler, recErr := appsetreconcile.NewReconciler(restCfg, "argocd"); recErr == nil {
+					if syncErr := reconciler.Trigger(ctx, "catalog"); syncErr != nil {
+						opts.Log.Warn("argocd sync trigger failed", zap.Error(syncErr))
+					}
 				}
-			} else {
-				opts.Log.Warn("argocd gRPC sync failed", zap.Error(cErr))
 			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w, `{"name":%q,"enabled":%v}`, name, newEnabled)
+		_, _ = fmt.Fprintf(w, `{"name":%q,"enabled":%v}`, name, result.Enabled)
 	}
 }

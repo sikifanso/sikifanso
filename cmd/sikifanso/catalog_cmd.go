@@ -7,11 +7,9 @@ import (
 
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcsync"
 	"github.com/alicanalbayrak/sikifanso/internal/catalog"
-	"github.com/alicanalbayrak/sikifanso/internal/gitops"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v3"
-	"go.uber.org/zap"
 )
 
 func catalogCmd() *cli.Command {
@@ -76,7 +74,6 @@ func catalogListAction(_ context.Context, cmd *cli.Command, sess *session.Sessio
 		return nil
 	}
 
-	// Build rows for two-pass alignment.
 	headers := []string{"NAME", "CATEGORY", "ENABLED", "DESCRIPTION"}
 	rows := make([][]string, 0, len(entries))
 	for _, e := range entries {
@@ -86,54 +83,7 @@ func catalogListAction(_ context.Context, cmd *cli.Command, sess *session.Sessio
 		}
 		rows = append(rows, []string{e.Name, e.Category, enabled, e.Description})
 	}
-
-	// Compute max column widths from headers and data.
-	widths := make([]int, len(headers))
-	for i, h := range headers {
-		widths[i] = len(h)
-	}
-	for _, row := range rows {
-		for i, cell := range row {
-			if len(cell) > widths[i] {
-				widths[i] = len(cell)
-			}
-		}
-	}
-
-	// Print header (bold). Pad the plain text first, then wrap in color
-	// so ANSI escape codes don't break width calculation.
-	bold := color.New(color.Bold).SprintFunc()
-	for i, h := range headers {
-		if i > 0 {
-			fmt.Fprint(os.Stderr, "  ")
-		}
-		padded := fmt.Sprintf("%-*s", widths[i], h)
-		fmt.Fprint(os.Stderr, bold(padded))
-	}
-	fmt.Fprintln(os.Stderr)
-
-	// Print data rows with colored ENABLED column.
-	green := color.New(color.FgGreen).SprintFunc()
-	red := color.New(color.FgRed).SprintFunc()
-	for _, row := range rows {
-		for i, cell := range row {
-			if i > 0 {
-				fmt.Fprint(os.Stderr, "  ")
-			}
-			padded := fmt.Sprintf("%-*s", widths[i], cell)
-			if i == 2 {
-				if cell == "true" {
-					fmt.Fprint(os.Stderr, green(padded))
-				} else {
-					fmt.Fprint(os.Stderr, red(padded))
-				}
-			} else {
-				fmt.Fprint(os.Stderr, padded)
-			}
-		}
-		fmt.Fprintln(os.Stderr)
-	}
-
+	printTable(os.Stderr, headers, rows)
 	return nil
 }
 
@@ -150,37 +100,21 @@ func catalogToggleAction(ctx context.Context, cmd *cli.Command, sess *session.Se
 		return fmt.Errorf("app name is required: sikifanso catalog %s NAME", verb)
 	}
 
-	entry, err := catalog.Find(sess.GitOpsPath, name)
+	result, err := catalog.Toggle(sess.GitOpsPath, name, enable)
 	if err != nil {
 		return err
 	}
-
-	if entry.Enabled == enable {
+	if result.NoChange {
 		fmt.Fprintf(os.Stderr, "%s is already %s\n", name, past)
 		return nil
 	}
 
-	if err := catalog.SetEnabled(sess.GitOpsPath, name, enable); err != nil {
-		zapLogger.Error("failed to set enabled", zap.String("app", name), zap.Bool("enabled", enable), zap.Error(err))
-		return fmt.Errorf("setting enabled=%v for %s: %w", enable, name, err)
-	}
-
-	commitMsg := fmt.Sprintf("catalog: %s %s", verb, name)
-	commitPath := fmt.Sprintf("catalog/%s.yaml", name)
-	if err := gitops.Commit(sess.GitOpsPath, commitMsg, commitPath); err != nil {
-		zapLogger.Error("failed to commit catalog change", zap.String("app", name), zap.Error(err))
-		return fmt.Errorf("committing change: %w", err)
-	}
-
 	fmt.Fprintf(os.Stderr, "%s  committed to gitops repo\n", name)
 
-	// Determine operation.
 	op := grpcsync.OpEnable
 	if !enable {
 		op = grpcsync.OpDisable
 	}
-
-	// Sync and wait.
 	if err := syncAfterMutation(ctx, cmd, sess, MutationOpts{
 		Operation:  op,
 		Apps:       []string{name},
@@ -189,7 +123,6 @@ func catalogToggleAction(ctx context.Context, cmd *cli.Command, sess *session.Se
 		return err
 	}
 
-	// Print final success AFTER sync confirms.
 	fmt.Fprintf(os.Stderr, "%s %s ✓\n", color.GreenString(name), past)
 	return nil
 }

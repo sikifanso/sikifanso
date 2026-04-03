@@ -67,14 +67,11 @@ func registerDoctorTools(s *mcp.Server, _ *Deps) {
 
 		dynClient, err := dynamic.NewForConfig(restCfg)
 		if err == nil {
-			var grpcClient *grpcclient.Client
-			if addr, addrErr := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL); addrErr == nil {
-				grpcClient, _ = grpcclient.NewClient(ctx, grpcclient.Options{
-					Address:  addr,
-					Username: sess.Services.ArgoCD.Username,
-					Password: sess.Services.ArgoCD.Password,
-				})
-			}
+			grpcClient, _ := grpcclient.FromSessionCreds(ctx,
+				sess.Services.ArgoCD.URL,
+				sess.Services.ArgoCD.Username,
+				sess.Services.ArgoCD.Password,
+			)
 			checks = append(checks, doctor.AppChecks(dynClient, sess.GitOpsPath, cfg, grpcClient)...)
 		}
 
@@ -91,16 +88,11 @@ func registerDoctorTools(s *mcp.Server, _ *Deps) {
 			return r, sv, e
 		}
 
-		addr, err := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL)
-		if err != nil {
-			return errResult(fmt.Errorf("deriving gRPC address: %w", err))
-		}
-
-		client, err := grpcclient.NewClient(ctx, grpcclient.Options{
-			Address:  addr,
-			Username: sess.Services.ArgoCD.Username,
-			Password: sess.Services.ArgoCD.Password,
-		})
+		client, err := grpcclient.FromSessionCreds(ctx,
+			sess.Services.ArgoCD.URL,
+			sess.Services.ArgoCD.Username,
+			sess.Services.ArgoCD.Password,
+		)
 		if err != nil {
 			return errResult(fmt.Errorf("connecting to ArgoCD: %w", err))
 		}

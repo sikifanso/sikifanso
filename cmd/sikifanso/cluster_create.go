@@ -100,25 +100,31 @@ func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
 			return fmt.Errorf("applying profile: %w", err)
 		}
 		// Trigger ArgoCD sync so enabled apps deploy immediately.
-		if addr, addrErr := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL); addrErr == nil {
-			if client, err := grpcclient.NewClient(ctx, grpcclient.Options{
-				Address:  addr,
-				Username: sess.Services.ArgoCD.Username,
-				Password: sess.Services.ArgoCD.Password,
-			}); err == nil {
-				defer client.Close()
-				orch := grpcsync.NewOrchestrator(client, zapLogger)
-				listed, _ := client.ListApplications(ctx)
-				var names []string
+		client, connErr := grpcclient.FromSessionCreds(ctx,
+			sess.Services.ArgoCD.URL,
+			sess.Services.ArgoCD.Username,
+			sess.Services.ArgoCD.Password,
+		)
+		if connErr != nil {
+			zapLogger.Warn("post-profile sync unavailable", zap.Error(connErr))
+		} else {
+			defer client.Close()
+			orch := grpcsync.NewOrchestrator(client, zapLogger)
+			listed, listErr := client.ListApplications(ctx)
+			if listErr != nil {
+				zapLogger.Warn("listing apps for post-profile sync failed", zap.Error(listErr))
+			} else {
+				names := make([]string, 0, len(listed))
 				for _, a := range listed {
 					names = append(names, a.Name)
 				}
 				if len(names) > 0 {
-					results, _ := orch.SyncAndWait(ctx, grpcsync.Request{Apps: names, Prune: true})
+					results, exitCode := orch.SyncAndWait(ctx, grpcsync.Request{Apps: names, Prune: true})
 					printSyncResults(os.Stderr, results)
+					if exitCode != grpcsync.ExitSuccess {
+						zapLogger.Warn("post-profile sync did not fully succeed", zap.Int("exitCode", int(exitCode)))
+					}
 				}
-			} else {
-				zapLogger.Warn("post-profile sync unavailable", zap.Error(err))
 			}
 		}
 	}

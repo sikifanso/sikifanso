@@ -7,7 +7,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/alicanalbayrak/sikifanso/internal/app"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcsync"
@@ -236,20 +235,17 @@ func appListAction(_ context.Context, cmd *cli.Command, sess *session.Session) e
 		return nil
 	}
 
-	w := tabwriter.NewWriter(os.Stderr, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "NAME\tCHART\tVERSION\tNAMESPACE\tSOURCE")
+	headers := []string{"NAME", "CHART", "VERSION", "NAMESPACE", "SOURCE"}
+	rows := make([][]string, 0, len(apps)+len(catalogEntries))
 	for _, a := range apps {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", a.Name, a.Chart, a.Version, a.Namespace, "custom")
+		rows = append(rows, []string{a.Name, a.Chart, a.Version, a.Namespace, "custom"})
 	}
 	for _, e := range catalogEntries {
 		if e.Enabled {
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", e.Name, e.Chart, e.TargetRevision, e.Namespace, "catalog")
+			rows = append(rows, []string{e.Name, e.Chart, e.TargetRevision, e.Namespace, "catalog"})
 		}
 	}
-	if err := w.Flush(); err != nil {
-		return fmt.Errorf("flushing output: %w", err)
-	}
-
+	printTable(os.Stderr, headers, rows)
 	return nil
 }
 

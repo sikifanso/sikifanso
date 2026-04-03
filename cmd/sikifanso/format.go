@@ -3,7 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"strings"
+	"text/tabwriter"
 
 	"github.com/urfave/cli/v3"
 )
@@ -26,4 +29,14 @@ func outputJSON(cmd *cli.Command, data any) bool {
 		fmt.Fprintf(os.Stderr, "Error: encoding JSON output: %v\n", err)
 	}
 	return true
+}
+
+// printTable writes a tabwriter-formatted table to w.
+func printTable(w io.Writer, headers []string, rows [][]string) {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(tw, strings.Join(headers, "\t"))
+	for _, row := range rows {
+		_, _ = fmt.Fprintln(tw, strings.Join(row, "\t"))
+	}
+	_ = tw.Flush()
 }

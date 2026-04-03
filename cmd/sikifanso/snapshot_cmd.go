@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"text/tabwriter"
 
 	"github.com/alicanalbayrak/sikifanso/internal/snapshot"
 	"github.com/fatih/color"
@@ -70,16 +69,12 @@ func snapshotListAction(_ context.Context, cmd *cli.Command) error {
 		return nil
 	}
 
-	w := tabwriter.NewWriter(os.Stderr, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "NAME\tCLUSTER\tCREATED\tCLI VERSION")
+	headers := []string{"NAME", "CLUSTER", "CREATED", "CLI VERSION"}
+	rows := make([][]string, 0, len(metas))
 	for _, m := range metas {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-			m.Name, m.ClusterName, m.CreatedAt.Format("2006-01-02 15:04:05"), m.CLIVersion)
+		rows = append(rows, []string{m.Name, m.ClusterName, m.CreatedAt.Format("2006-01-02 15:04:05"), m.CLIVersion})
 	}
-	if err := w.Flush(); err != nil {
-		return fmt.Errorf("flushing output: %w", err)
-	}
-
+	printTable(os.Stderr, headers, rows)
 	return nil
 }
 

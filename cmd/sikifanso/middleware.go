@@ -54,18 +54,12 @@ func waitSyncFlags() []cli.Flag {
 }
 
 // grpcClientFromSession creates a gRPC client from session credentials.
-// ArgoCD multiplexes gRPC and HTTP on the same port via CMux, so the
-// gRPC address is derived from the HTTP URL.
 func grpcClientFromSession(ctx context.Context, sess *session.Session) (*grpcclient.Client, error) {
-	addr, err := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL)
-	if err != nil {
-		return nil, err
-	}
-	return grpcclient.NewClient(ctx, grpcclient.Options{
-		Address:  addr,
-		Username: sess.Services.ArgoCD.Username,
-		Password: sess.Services.ArgoCD.Password,
-	})
+	return grpcclient.FromSessionCreds(ctx,
+		sess.Services.ArgoCD.URL,
+		sess.Services.ArgoCD.Username,
+		sess.Services.ArgoCD.Password,
+	)
 }
 
 // MutationOpts describes the sync behaviour after a mutation command.

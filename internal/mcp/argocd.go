@@ -26,18 +26,12 @@ type argocdProjectsInput struct {
 }
 
 // grpcClientFromMCPSession creates a gRPC client from session credentials.
-// The gRPC address is derived from the ArgoCD HTTP URL — ArgoCD multiplexes
-// gRPC and HTTP on the same port.
 func grpcClientFromMCPSession(ctx context.Context, sess *session.Session) (*grpcclient.Client, error) {
-	addr, err := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL)
-	if err != nil {
-		return nil, fmt.Errorf("deriving gRPC address: %w", err)
-	}
-	return grpcclient.NewClient(ctx, grpcclient.Options{
-		Address:  addr,
-		Username: sess.Services.ArgoCD.Username,
-		Password: sess.Services.ArgoCD.Password,
-	})
+	return grpcclient.FromSessionCreds(ctx,
+		sess.Services.ArgoCD.URL,
+		sess.Services.ArgoCD.Username,
+		sess.Services.ArgoCD.Password,
+	)
 }
 
 func registerArgoCDTools(s *mcp.Server, _ *Deps) {

@@ -2,7 +2,6 @@ package grpcsync
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
@@ -226,7 +225,7 @@ func (o *Orchestrator) waitForAppear(ctx context.Context, name string, req Reque
 
 		_, err := o.client.GetApplication(ctx, name)
 		if err != nil {
-			if strings.Contains(err.Error(), "not found") {
+			if grpcclient.IsNotFound(err) {
 				updateFn(Result{App: name, SyncStatus: "Waiting", Health: "Waiting", Message: "waiting for app to appear"})
 				continue
 			}
@@ -252,7 +251,7 @@ func (o *Orchestrator) waitForDisappear(ctx context.Context, name string, _ Requ
 	// Check if already gone.
 	_, err := o.client.GetApplication(ctx, name)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if grpcclient.IsNotFound(err) {
 			updateFn(Result{App: name, SyncStatus: "Deleted", Health: "Deleted", Deleted: true})
 			return
 		}
@@ -309,7 +308,7 @@ func (o *Orchestrator) pollUntilGone(ctx context.Context, name string, updateFn 
 
 		_, err := o.client.GetApplication(ctx, name)
 		if err != nil {
-			if strings.Contains(err.Error(), "not found") {
+			if grpcclient.IsNotFound(err) {
 				updateFn(Result{App: name, SyncStatus: "Deleted", Health: "Deleted", Deleted: true})
 				return
 			}

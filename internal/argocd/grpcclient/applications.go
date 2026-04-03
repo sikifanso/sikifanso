@@ -2,16 +2,20 @@ package grpcclient
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	applicationpkg "github.com/argoproj/argo-cd/v2/pkg/apiclient/application"
 	"github.com/argoproj/argo-cd/v2/pkg/apis/application/v1alpha1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"k8s.io/apimachinery/pkg/watch"
 )
 
-// ErrAppNotFound is returned when a requested application does not exist.
-var ErrAppNotFound = errors.New("application not found")
+// IsNotFound reports whether err represents a gRPC NotFound status,
+// even if the error has been wrapped with fmt.Errorf %w.
+func IsNotFound(err error) bool {
+	return status.Code(err) == codes.NotFound
+}
 
 // ListApplications returns a summary status for every application visible to
 // the authenticated user.

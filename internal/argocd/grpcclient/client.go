@@ -90,6 +90,20 @@ func (c *Client) SetLogger(log *zap.Logger) {
 	c.log = log
 }
 
+// FromSessionCreds creates an authenticated gRPC client using the ArgoCD URL
+// and credentials typically stored in a session.
+func FromSessionCreds(ctx context.Context, argocdURL, username, password string) (*Client, error) {
+	addr, err := AddressFromURL(argocdURL)
+	if err != nil {
+		return nil, err
+	}
+	return NewClient(ctx, Options{
+		Address:  addr,
+		Username: username,
+		Password: password,
+	})
+}
+
 // Close is a no-op for now; individual sub-clients are closed per-call.
 func (c *Client) Close() {}
 

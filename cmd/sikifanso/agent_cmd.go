@@ -84,18 +84,12 @@ func agentListCmd() *cli.Command {
 				return nil
 			}
 
-			bold := color.New(color.Bold).SprintFunc()
-			fmt.Fprintf(os.Stderr, "%s  %s  %s  %s  %s\n",
-				bold(fmt.Sprintf("%-20s", "NAME")),
-				bold(fmt.Sprintf("%-28s", "NAMESPACE")),
-				bold(fmt.Sprintf("%-8s", "CPU")),
-				bold(fmt.Sprintf("%-10s", "MEMORY")),
-				bold("PODS"),
-			)
+			headers := []string{"NAME", "NAMESPACE", "CPU", "MEMORY", "PODS"}
+			rows := make([][]string, 0, len(agents))
 			for _, a := range agents {
-				fmt.Fprintf(os.Stderr, "%-20s  %-28s  %-8s  %-10s  %s\n",
-					a.Name, a.Namespace, a.CPU, a.Memory, a.Pods)
+				rows = append(rows, []string{a.Name, a.Namespace, a.CPU, a.Memory, a.Pods})
 			}
+			printTable(os.Stderr, headers, rows)
 			return nil
 		}),
 	}

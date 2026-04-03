@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/alicanalbayrak/sikifanso/internal/catalog"
-	"github.com/alicanalbayrak/sikifanso/internal/gitops"
 	"github.com/alicanalbayrak/sikifanso/internal/profile"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -101,10 +100,8 @@ func registerCatalogTools(s *mcp.Server, deps *Deps) {
 }
 
 func catalogToggle(ctx context.Context, deps *Deps, clusterName, appName string, enable bool) (*mcp.CallToolResult, any, error) {
-	verb := "enable"
 	past := "enabled"
 	if !enable {
-		verb = "disable"
 		past = "disabled"
 	}
 
@@ -113,24 +110,14 @@ func catalogToggle(ctx context.Context, deps *Deps, clusterName, appName string,
 		return r, sv, e
 	}
 
-	entry, err := catalog.Find(sess.GitOpsPath, appName)
+	result, err := catalog.Toggle(sess.GitOpsPath, appName, enable)
 	if err != nil {
 		return errResult(err)
 	}
-	if entry.Enabled == enable {
+	if result.NoChange {
 		return textResult(fmt.Sprintf("%s is already %s.", appName, past))
 	}
 
-	if err := catalog.SetEnabled(sess.GitOpsPath, appName, enable); err != nil {
-		return errResult(fmt.Errorf("setting %s=%v: %w", verb, enable, err))
-	}
-
-	commitMsg := fmt.Sprintf("catalog: %s %s", verb, appName)
-	commitPath := fmt.Sprintf("catalog/%s.yaml", appName)
-	if err := gitops.Commit(sess.GitOpsPath, commitMsg, commitPath); err != nil {
-		return errResult(fmt.Errorf("committing change: %w", err))
-	}
-
-	result := fmt.Sprintf("%s %s and committed to gitops repo.", appName, past)
-	return textResult(appendSyncStatus(ctx, deps, sess, result, "catalog"))
+	msg := fmt.Sprintf("%s %s and committed to gitops repo.", appName, past)
+	return textResult(appendSyncStatus(ctx, deps, sess, msg, "catalog"))
 }
