@@ -13,7 +13,20 @@ import (
 func snapshotCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "snapshot",
-		Usage: "Capture and manage cluster state snapshots",
+		Usage: "Capture, restore, and manage cluster snapshots",
+		Commands: []*cli.Command{
+			snapshotCaptureCmd(),
+			snapshotListCmd(),
+			snapshotRestoreCmd(),
+			snapshotDeleteCmd(),
+		},
+	}
+}
+
+func snapshotCaptureCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "capture",
+		Usage: "Capture current cluster state",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "name",
@@ -21,10 +34,6 @@ func snapshotCmd() *cli.Command {
 			},
 		},
 		Action: snapshotCaptureAction,
-		Commands: []*cli.Command{
-			snapshotListCmd(),
-			snapshotDeleteCmd(),
-		},
 	}
 }
 
@@ -32,7 +41,7 @@ func snapshotCaptureAction(_ context.Context, cmd *cli.Command) error {
 	clusterName := cmd.String("cluster")
 	snapshotName := cmd.String("name")
 	if snapshotName == "" {
-		return fmt.Errorf("snapshot name is required: sikifanso snapshot --name NAME")
+		return fmt.Errorf("snapshot name is required: sikifanso snapshot capture --name NAME")
 	}
 
 	path, err := snapshot.Capture(clusterName, snapshotName, version)
@@ -78,6 +87,34 @@ func snapshotListAction(_ context.Context, cmd *cli.Command) error {
 	return nil
 }
 
+func snapshotRestoreCmd() *cli.Command {
+	return &cli.Command{
+		Name:          "restore",
+		Usage:         "Restore a cluster from a snapshot",
+		ArgsUsage:     "NAME",
+		Action:        snapshotRestoreAction,
+		ShellComplete: snapshotNameComplete,
+	}
+}
+
+func snapshotRestoreAction(_ context.Context, cmd *cli.Command) error {
+	snapshotName := cmd.Args().First()
+	if snapshotName == "" {
+		return fmt.Errorf("snapshot name is required: sikifanso snapshot restore NAME")
+	}
+
+	sess, gitOpsPath, err := snapshot.Restore(snapshotName)
+	if err != nil {
+		return fmt.Errorf("restoring snapshot: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Cluster %s restored from snapshot %s\n",
+		color.GreenString(sess.ClusterName), color.GreenString(snapshotName))
+	fmt.Fprintf(os.Stderr, "GitOps path: %s\n", gitOpsPath)
+	fmt.Fprintln(os.Stderr, "Run 'sikifanso cluster create' to recreate the cluster infrastructure")
+	return nil
+}
+
 func snapshotDeleteCmd() *cli.Command {
 	return &cli.Command{
 		Name:          "delete",
@@ -99,34 +136,6 @@ func snapshotDeleteAction(_ context.Context, cmd *cli.Command) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "%s deleted\n", color.GreenString(name))
-	return nil
-}
-
-func restoreCmd() *cli.Command {
-	return &cli.Command{
-		Name:          "restore",
-		Usage:         "Restore a cluster from a snapshot",
-		ArgsUsage:     "NAME",
-		Action:        restoreAction,
-		ShellComplete: snapshotNameComplete,
-	}
-}
-
-func restoreAction(_ context.Context, cmd *cli.Command) error {
-	snapshotName := cmd.Args().First()
-	if snapshotName == "" {
-		return fmt.Errorf("snapshot name is required: sikifanso restore NAME")
-	}
-
-	sess, gitOpsPath, err := snapshot.Restore(snapshotName)
-	if err != nil {
-		return fmt.Errorf("restoring snapshot: %w", err)
-	}
-
-	fmt.Fprintf(os.Stderr, "Cluster %s restored from snapshot %s\n",
-		color.GreenString(sess.ClusterName), color.GreenString(snapshotName))
-	fmt.Fprintf(os.Stderr, "GitOps path: %s\n", gitOpsPath)
-	fmt.Fprintln(os.Stderr, "Run 'sikifanso cluster create' to recreate the cluster infrastructure")
 	return nil
 }
 

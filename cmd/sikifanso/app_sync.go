@@ -10,7 +10,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func argocdSyncCmd() *cli.Command {
+func appSyncCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "sync",
 		Usage: "Trigger ArgoCD sync for all or specific applications",

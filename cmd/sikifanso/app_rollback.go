@@ -9,7 +9,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func argocdRollbackCmd() *cli.Command {
+func appRollbackCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "rollback",
 		Usage:     "Roll back an application to a previous revision",

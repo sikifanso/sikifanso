@@ -9,7 +9,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func argocdLogsCmd() *cli.Command {
+func appLogsCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "logs",
 		Usage:     "Stream pod logs for an application",

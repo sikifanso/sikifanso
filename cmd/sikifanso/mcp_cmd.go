@@ -9,8 +9,9 @@ import (
 
 func mcpCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "mcp",
-		Usage: "Model Context Protocol server",
+		Name:   "mcp",
+		Usage:  "Model Context Protocol server",
+		Hidden: true,
 		Commands: []*cli.Command{
 			mcpServeCmd(),
 		},

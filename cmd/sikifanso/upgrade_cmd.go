@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func upgradeCmd() *cli.Command {
+func clusterUpgradeCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "upgrade",
 		Usage: "Upgrade cluster components",
