@@ -15,7 +15,7 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
-func doctorCmd() *cli.Command {
+func clusterDoctorCmd() *cli.Command {
 	return &cli.Command{
 		Name:   "doctor",
 		Usage:  "Run health checks on the cluster and its components",

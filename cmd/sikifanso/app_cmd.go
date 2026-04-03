@@ -24,11 +24,18 @@ import (
 func appCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "app",
-		Usage: "Manage GitOps applications",
+		Usage: "Manage applications (catalog and custom Helm charts)",
 		Commands: []*cli.Command{
 			appAddCmd(),
 			appListCmd(),
 			appRemoveCmd(),
+			appEnableCmd(),
+			appDisableCmd(),
+			appSyncCmd(),
+			appStatusCmd(),
+			appDiffCmd(),
+			appLogsCmd(),
+			appRollbackCmd(),
 		},
 	}
 }
@@ -271,6 +278,98 @@ func appRemoveAction(ctx context.Context, cmd *cli.Command, sess *session.Sessio
 	}
 
 	return nil
+}
+
+func appEnableCmd() *cli.Command {
+	return &cli.Command{
+		Name:      "enable",
+		Usage:     "Enable a catalog application",
+		ArgsUsage: "NAME",
+		Flags:     waitSyncFlags(),
+		Action: withSession(func(ctx context.Context, cmd *cli.Command, sess *session.Session) error {
+			return appToggleAction(ctx, cmd, sess, true)
+		}),
+		ShellComplete: catalogDisabledNamesComplete,
+	}
+}
+
+func appDisableCmd() *cli.Command {
+	return &cli.Command{
+		Name:      "disable",
+		Usage:     "Disable a catalog application",
+		ArgsUsage: "NAME",
+		Flags:     waitSyncFlags(),
+		Action: withSession(func(ctx context.Context, cmd *cli.Command, sess *session.Session) error {
+			return appToggleAction(ctx, cmd, sess, false)
+		}),
+		ShellComplete: catalogEnabledNamesComplete,
+	}
+}
+
+func appToggleAction(ctx context.Context, cmd *cli.Command, sess *session.Session, enable bool) error {
+	verb := "enable"
+	past := "enabled"
+	if !enable {
+		verb = "disable"
+		past = "disabled"
+	}
+
+	name := cmd.Args().First()
+	if name == "" {
+		return fmt.Errorf("app name is required: sikifanso app %s NAME", verb)
+	}
+
+	result, err := catalog.Toggle(sess.GitOpsPath, name, enable)
+	if err != nil {
+		return err
+	}
+	if result.NoChange {
+		fmt.Fprintf(os.Stderr, "%s is already %s\n", name, past)
+		return nil
+	}
+
+	fmt.Fprintf(os.Stderr, "%s committed to gitops repo\n", name)
+
+	op := grpcsync.OpEnable
+	if !enable {
+		op = grpcsync.OpDisable
+	}
+	if err := syncAfterMutation(ctx, cmd, sess, MutationOpts{
+		Operation:  op,
+		Apps:       []string{name},
+		AppSetName: "catalog",
+	}); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(os.Stderr, "%s %s ✓\n", color.GreenString(name), past)
+	return nil
+}
+
+func catalogNamesComplete(_ context.Context, cmd *cli.Command, filter func(catalog.Entry) bool) {
+	clusterName := cmd.String("cluster")
+	sess, err := session.Load(clusterName)
+	if err != nil {
+		return
+	}
+
+	entries, err := catalog.List(sess.GitOpsPath)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if filter(e) {
+			_, _ = fmt.Fprintln(cmd.Root().Writer, e.Name)
+		}
+	}
+}
+
+func catalogDisabledNamesComplete(ctx context.Context, cmd *cli.Command) {
+	catalogNamesComplete(ctx, cmd, func(e catalog.Entry) bool { return !e.Enabled })
+}
+
+func catalogEnabledNamesComplete(ctx context.Context, cmd *cli.Command) {
+	catalogNamesComplete(ctx, cmd, func(e catalog.Entry) bool { return e.Enabled })
 }
 
 func appNameShellComplete(_ context.Context, cmd *cli.Command) {

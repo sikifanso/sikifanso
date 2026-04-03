@@ -9,20 +9,10 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func profileCmd() *cli.Command {
+func clusterProfilesCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "profile",
-		Usage: "Manage cluster profiles",
-		Commands: []*cli.Command{
-			profileListCmd(),
-		},
-	}
-}
-
-func profileListCmd() *cli.Command {
-	return &cli.Command{
-		Name:  "list",
-		Usage: "List available cluster profiles",
+		Name:  "profiles",
+		Usage: "List available cluster profiles for --profile flag",
 		Action: func(_ context.Context, cmd *cli.Command) error {
 			profiles := profile.List()
 			if outputJSON(cmd, profiles) {

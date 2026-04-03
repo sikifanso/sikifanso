@@ -32,6 +32,6 @@ func newApp() *cli.Command {
 			},
 		},
 		Before:   setupAction,
-		Commands: []*cli.Command{clusterCmd(), argocdCmd(), appCmd(), catalogCmd(), profileCmd(), agentCmd(), mcpCmd(), statusCmd(), doctorCmd(), snapshotCmd(), restoreCmd(), dashboardCmd(), upgradeCmd()},
+		Commands: []*cli.Command{clusterCmd(), appCmd(), agentCmd(), snapshotCmd(), mcpCmd()},
 	}
 }

@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func dashboardCmd() *cli.Command {
+func clusterDashboardCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "dashboard",
 		Usage: "Start the local web dashboard",

@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/alicanalbayrak/sikifanso/internal/session"
 	"github.com/urfave/cli/v3"
 )
 
-func argocdDiffCmd() *cli.Command {
+func appDiffCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "diff",
 		Usage:     "Show diff between live and desired state for an application",
@@ -63,31 +64,7 @@ func argocdDiffCmd() *cli.Command {
 	}
 }
 
-// indentLines prepends a prefix to every line of s.
 func indentLines(s, prefix string) string {
-	var out string
-	lines := splitLines(s)
-	for i, l := range lines {
-		if i == 0 {
-			out = prefix + l
-		} else {
-			out += "\n" + prefix + l
-		}
-	}
-	return out
-}
-
-func splitLines(s string) []string {
-	var lines []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			lines = append(lines, s[start:i])
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
-	}
-	return lines
+	s = strings.TrimRight(s, "\n")
+	return prefix + strings.ReplaceAll(s, "\n", "\n"+prefix)
 }

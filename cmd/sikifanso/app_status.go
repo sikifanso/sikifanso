@@ -11,7 +11,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func argocdStatusCmd() *cli.Command {
+func appStatusCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "status",
 		Usage:     "Show detailed application status with resource tree",
