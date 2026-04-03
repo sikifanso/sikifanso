@@ -328,7 +328,7 @@ func appToggleAction(ctx context.Context, cmd *cli.Command, sess *session.Sessio
 		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "%s  committed to gitops repo\n", name)
+	fmt.Fprintf(os.Stderr, "%s committed to gitops repo\n", name)
 
 	op := grpcsync.OpEnable
 	if !enable {

@@ -65,5 +65,6 @@ func appDiffCmd() *cli.Command {
 }
 
 func indentLines(s, prefix string) string {
+	s = strings.TrimRight(s, "\n")
 	return prefix + strings.ReplaceAll(s, "\n", "\n"+prefix)
 }
