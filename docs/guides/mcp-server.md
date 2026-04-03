@@ -35,7 +35,7 @@ Then you can ask Claude things like:
 
 ## Available tools
 
-The MCP server exposes 22 tools across 6 categories:
+The MCP server exposes 25 tools across 6 categories:
 
 ### Cluster management
 

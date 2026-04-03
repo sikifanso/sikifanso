@@ -1,6 +1,6 @@
 APP_NAME := sikifanso
 
-.PHONY: build run clean snapshot release-dry-run lint test test-integration vet fmt generate install docs docs-serve
+.PHONY: build run clean snapshot release-dry-run lint test test-integration vet fmt generate install docs-setup docs docs-serve
 
 # Build for your current platform
 build:
@@ -52,7 +52,13 @@ test:
 test-integration:
 	go test -race -count=1 -tags=integration ./...
 
+# Install docs toolchain (one-time setup)
+docs-setup:
+	python3 -m venv .venv
+	.venv/bin/pip install zensical
+
 # Build documentation site (output: site/)
+# Requires: make docs-setup (zensical is an MkDocs-compatible static site generator)
 docs:
 	.venv/bin/zensical build
 

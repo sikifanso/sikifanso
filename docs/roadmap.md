@@ -22,7 +22,7 @@ See [Agent Sandboxes](guides/agent-sandboxes.md) for details.
 
 ## Phase 3: MCP Server Interface -- shipped
 
-`sikifanso mcp serve` exposes cluster operations as MCP tools (stdio transport). 22 tools across cluster management, catalog, agents, ArgoCD, Kubernetes, and health checks. Any MCP-compatible client can manage the cluster.
+`sikifanso mcp serve` exposes cluster operations as MCP tools (stdio transport). 25 tools across cluster management, catalog, agents, ArgoCD, Kubernetes, and health checks. Any MCP-compatible client can manage the cluster.
 
 See [MCP Server](guides/mcp-server.md) for details.
 

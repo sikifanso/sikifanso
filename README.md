@@ -201,7 +201,7 @@ Expose cluster operations as MCP tools for AI agents:
 sikifanso mcp serve
 ```
 
-22 tools across cluster management, catalog, agents, ArgoCD, Kubernetes, and health checks. Configure in Claude Code:
+25 tools across cluster management, catalog, agents, ArgoCD, Kubernetes, and health checks. Configure in Claude Code:
 
 ```json
 {
@@ -320,6 +320,7 @@ sikifanso cluster create --name lab2 --profile agent-minimal
 
 # Deploy to a specific cluster
 sikifanso app sync --cluster lab1
+sikifanso app sync --cluster lab2
 
 # See all clusters
 sikifanso cluster info

@@ -154,7 +154,7 @@ Agent definitions live in the gitops repo at `agents/<name>.yaml` with Helm valu
 
 ## MCP server architecture
 
-The MCP server (`internal/mcp/`) exposes 22 tools across 6 categories: cluster management, catalog/profiles, agents, ArgoCD, Kubernetes, and health. It uses the [Model Context Protocol Go SDK](https://github.com/modelcontextprotocol/go-sdk) with stdio transport.
+The MCP server (`internal/mcp/`) exposes 25 tools across 6 categories: cluster management, catalog/profiles, agents, ArgoCD, Kubernetes, and health. It uses the [Model Context Protocol Go SDK](https://github.com/modelcontextprotocol/go-sdk) with stdio transport.
 
 Each MCP tool calls the same internal functions that the CLI commands use -- there are no separate code paths or elevated privileges. The server is designed to be launched as a subprocess by MCP clients (Claude Code, Claude Desktop, Cursor, etc.) via `sikifanso mcp serve`.
 
