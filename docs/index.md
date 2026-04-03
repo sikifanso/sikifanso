@@ -12,7 +12,7 @@ hide:
 <h1 align="center" style="font-family: 'Space Grotesk', sans-serif;">sikifanso</h1>
 
 <p align="center">
-  <strong>Bootstrap a fully functional homelab Kubernetes cluster with a single command.</strong>
+  <strong>Bootstrap Kubernetes clusters purpose-built for running AI agents safely.</strong>
 </p>
 
 <p align="center">
@@ -33,18 +33,20 @@ hide:
 ## What you get
 
 ```bash
-sikifanso cluster create
+sikifanso cluster create --profile agent-dev
 ```
 
-- **k3d cluster** — single-node k3s v1.29
-- **Cilium** — full kube-proxy replacement, ingress controller, Hubble UI
-- **ArgoCD** — configured to read from a local gitops repo on your filesystem
-- **GitOps repo** — scaffolded from a bootstrap template, mounted into the cluster
-- **App catalog** — 20+ curated apps ready to enable with `sikifanso catalog enable <name>`
-- **Root ApplicationSets** — one for custom apps, one for the curated catalog
-- **Snapshots** — capture and restore cluster configuration with `sikifanso snapshot` / `sikifanso restore`
-- **Dashboard** — local web dashboard at `http://localhost:9090` via `sikifanso dashboard`
-- **Upgrades** — upgrade Cilium and ArgoCD in-place with `sikifanso upgrade`
+- **k3d cluster** -- single-node k3s v1.29
+- **Cilium** -- full kube-proxy replacement, ingress controller, Hubble UI, network isolation for agents
+- **ArgoCD** -- configured to read from a local gitops repo on your filesystem
+- **GitOps repo** -- scaffolded from a bootstrap template, mounted into the cluster
+- **AI Agent Infrastructure Catalog** -- 17 curated tools across gateway, observability, guardrails, RAG, runtime, models, and storage
+- **Profiles** -- predefined tool sets for common workloads (`agent-minimal`, `agent-dev`, `agent-safe`, `agent-full`, `rag`)
+- **Agent sandboxes** -- isolated namespaces with resource quotas and Cilium network policies
+- **MCP server** -- expose cluster operations as tools for AI agents (Claude, Cursor, etc.)
+- **Snapshots** -- capture and restore cluster configuration
+- **Dashboard** -- local web dashboard at `http://localhost:9090`
+- **Upgrades** -- upgrade Cilium and ArgoCD in-place
 
 No remote git server. No cloud account. Just Docker and a single command.
 
@@ -52,7 +54,7 @@ No remote git server. No cloud account. Just Docker and a single command.
 
 - [Docker](https://docs.docker.com/get-docker/) (running)
 
-That's it. You do **not** need to install k3d, Helm, Cilium, ArgoCD, or any other Kubernetes tooling — sikifanso embeds everything and handles the full stack internally.
+That's it. You do **not** need to install k3d, Helm, Cilium, ArgoCD, or any other Kubernetes tooling -- sikifanso embeds everything and handles the full stack internally.
 
 ## Install
 

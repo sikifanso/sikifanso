@@ -14,7 +14,7 @@ A natural next step is supporting **remote git repositories** (e.g., GitHub, Git
 ### Current workflow (local)
 
 ```
-Edit files locally → git commit → sikifanso argocd sync
+Edit files locally → git commit → sikifanso app sync
 ```
 
 - Gitops repo lives at `~/.sikifanso/clusters/<name>/gitops/`
@@ -30,7 +30,7 @@ Edit files anywhere → git push → ArgoCD syncs automatically
 - Gitops repo hosted on GitHub (or any git provider)
 - ArgoCD configured with repo credentials
 - Standard ArgoCD polling or webhook-based sync
-- No need for `sikifanso argocd sync` — ArgoCD handles it natively
+- No need for `sikifanso app sync` -- ArgoCD handles it natively
 
 ## Benefits
 

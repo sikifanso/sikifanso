@@ -1,67 +1,84 @@
 # Roadmap
 
-Ideas and possibilities for future development. Nothing here is guaranteed — these are directions worth exploring.
+sikifanso is an AI agent infrastructure platform. Development follows a phased approach, building from cluster foundations toward AI-powered operations.
 
-## Remote GitOps repos
+---
 
-Currently the gitops repo lives on your local filesystem. A natural evolution is supporting **remote git repositories** (e.g., on GitHub) as the gitops source. This would enable:
+## Phase 0: Foundation & Identity -- shipped
 
-- Pushing gitops changes from any machine
-- Collaborating on cluster configuration
-- Using GitHub Actions or other CI to validate app definitions
-- Standard pull request workflows for cluster changes
+Replaced the original homelab catalog with AI agent infrastructure tools. 17 curated tools across 7 categories: gateway, observability, guardrails, RAG, runtime, models, and storage. Retained the existing k3d bootstrapping, GitOps catalog system, doctor checks, snapshots, TUI browser, dashboard, and dual-track app model.
 
-See [Remote GitOps](guides/remote-gitops.md) for more details.
+## Phase 1: Agent Cluster Profiles -- shipped
 
-## Additional CNI options
+`sikifanso cluster create --profile <name>` enables a pre-defined set of catalog apps. Profiles are composable: `--profile agent-dev,rag` enables the union of both. Available profiles: `agent-minimal`, `agent-full`, `agent-dev`, `agent-safe`, `rag`.
 
-Cilium is a great default, but some users may prefer alternatives:
+See [Profiles](guides/profiles.md) for details.
 
-- **Calico** — widely adopted, simpler configuration
-- **Flannel** — lightweight, built into k3s
-- **None** — bring your own CNI
+## Phase 2: Agent Isolation & Network Policies -- shipped
 
-A `--cni` flag on `cluster create` could let users choose.
+`sikifanso agent create <name>` scaffolds a namespace with resource quotas, network policies, and service account. Cilium NetworkPolicies enforce default-deny egress, allowlisted data layer access, no cross-agent traffic, and no Kubernetes API access.
 
-## Health diagnostics -- shipped
+See [Agent Sandboxes](guides/agent-sandboxes.md) for details.
 
-`sikifanso doctor` runs a series of health checks against the cluster: Docker daemon, k3d nodes, Cilium, Hubble, ArgoCD, and every enabled catalog app. Each failure includes the root cause and a suggested fix command. See the [CLI reference](cli.md#doctor) for details.
+## Phase 3: MCP Server Interface -- shipped
 
-## App catalog -- shipped
+`sikifanso mcp serve` exposes cluster operations as MCP tools (stdio transport). 25 tools across cluster management, catalog, agents, ArgoCD, Kubernetes, and health checks. Any MCP-compatible client can manage the cluster.
 
-The curated app catalog is now available via `sikifanso catalog list/enable/disable`. The bootstrap repo includes 20+ pre-defined apps across monitoring, media, homelab, and dev categories. Enable any catalog app with `sikifanso catalog enable <name>` -- no need to look up repo URLs or chart names. Custom Helm charts can still be deployed via `sikifanso app add`. Running `sikifanso app add` with no arguments launches a TUI catalog browser for interactive toggling.
+See [MCP Server](guides/mcp-server.md) for details.
 
-## Cluster templates
+---
 
-Beyond bootstrap repos, full cluster templates that define:
+## Phase 4: AG-UI Protocol Integration
 
-- Node count and resource limits
-- Pre-installed apps
-- Network policies
-- Storage classes
+*Stream agent reasoning and actions to terminal/web UI in real-time.*
 
-Templates could be shared and reused across teams.
+- AG-UI SSE endpoint in the dashboard server
+- Event flow: `RUN_STARTED` -> `STEP_STARTED/FINISHED` -> `TOOL_CALL_*` -> `TEXT_MESSAGE_*` -> `STATE_SNAPSHOT/DELTA`
+- Terminal renderer for structured output
+- Web dashboard live activity feed
+- `sikifanso agent watch <name>` for live agent activity streaming
 
-## Terraform / OpenTofu integration
+## Phase 5: AI-Powered Operations
 
-For users who want to manage their homelab infrastructure as code alongside cloud resources. A Terraform provider or module that wraps sikifanso.
+*Natural language cluster operations powered by MCP tools and AG-UI streaming.*
 
-## Multi-node topologies
+- `sikifanso ai "<prompt>"` -- natural language cluster operations via Claude API with tool use
+- AI uses the same MCP tools that external agents use (Phase 3)
+- Reasoning streamed via AG-UI (Phase 4)
+- Intelligent troubleshooting: `sikifanso ai "why is langfuse unhealthy"`
+- AI-driven catalog: `sikifanso ai "I need to run agents with guardrails and cost tracking"`
 
-Default is a single-node cluster (1 server, 0 agents). Possibilities:
+## Phase 6: Advanced Features
 
-- HA control plane (3 servers)
-- Additional agent nodes for workload isolation
-- Dedicated nodes for specific workloads (labeled/tainted)
+*Production hardening, community, ecosystem.*
 
-## Dashboard -- shipped
+- Shareable agent cluster profiles (OCI artifacts / git refs)
+- Community catalog contributions (curated AI tool definitions)
+- Multi-cluster agent federation
+- GPU scheduling support (Ollama/vLLM with NVIDIA GPUs)
+- Cloud cluster support (bootstrap EKS/GKE with the same catalog)
+- Agent marketplace: pre-built agent templates that run on sikifanso clusters
 
-`sikifanso dashboard` starts a local web dashboard at `http://localhost:9090`. Configurable with `--addr` and `--no-browser` flags. See the [CLI reference](cli.md#dashboard) for details.
+---
 
-## Component upgrades -- shipped
+## Phase dependencies
 
-`sikifanso upgrade` upgrades Cilium and ArgoCD. Use `--all` to upgrade everything, or target individual components with `sikifanso upgrade cilium` / `sikifanso upgrade argocd`. Takes a pre-upgrade snapshot by default (skip with `--skip-snapshot`). See the [CLI reference](cli.md#upgrade) for details.
+```
+Phase 0 (Foundation) -- DONE
+  +---> Phase 1 (Profiles) -- DONE
+  +---> Phase 2 (Isolation) -- DONE
+           +---> Phase 3 (MCP Server) -- DONE
+                    +---> Phase 4 (AG-UI)
+                             +---> Phase 5 (AI Ops)
+                                      +---> Phase 6 (Advanced)
+```
 
-## Backup and restore -- shipped
+## Other ideas
 
-`sikifanso snapshot` captures the cluster's configuration state (session metadata + gitops repo) into a `.tar.gz` archive stored at `~/.sikifanso/snapshots/`. Use `sikifanso snapshot list` to see available snapshots and `sikifanso snapshot delete NAME` to remove one. `sikifanso restore NAME` recreates a cluster's configuration from a snapshot (run `sikifanso cluster create` afterward to rebuild the infrastructure). See the [CLI reference](cli.md#snapshot) for details.
+These are directions worth exploring, not committed to any phase:
+
+- **Remote GitOps repos** -- support remote git repos as the gitops source for collaboration and CI/CD. See [Remote GitOps](guides/remote-gitops.md).
+- **Additional CNI options** -- Calico, Flannel, or bring-your-own via a `--cni` flag.
+- **Cluster templates** -- shareable templates defining node count, resource limits, pre-installed apps, and network policies.
+- **Multi-node topologies** -- HA control plane, agent nodes for workload isolation.
+- **Terraform / OpenTofu integration** -- a provider or module that wraps sikifanso.

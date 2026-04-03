@@ -21,7 +21,7 @@ A CLI tool that bootstraps Kubernetes clusters purpose-built for running AI agen
 ## What you get
 
 ```
-sikifanso cluster create
+sikifanso cluster create --profile agent-dev
 ```
 
 - **k3d cluster** -- single-node k3s v1.29
@@ -39,6 +39,10 @@ sikifanso cluster create
 | **Runtime** | Temporal, External Secrets, OPA | Workflow orchestration, secrets, policy engine |
 | **Models** | Ollama | Local LLM inference |
 | **Storage** | PostgreSQL, Valkey (Redis) | Supporting data stores |
+
+- **Profiles** -- predefined tool sets (`agent-minimal`, `agent-dev`, `agent-safe`, `agent-full`, `rag`)
+- **Agent sandboxes** -- isolated namespaces with resource quotas and network policies
+- **MCP server** -- expose cluster operations as tools for AI agents (Claude, Cursor, etc.)
 
 ## Prerequisites
 
@@ -69,26 +73,20 @@ go build -o sikifanso ./cmd/sikifanso
 ## Quick start
 
 ```bash
-# Create a cluster
-sikifanso cluster create
+# Create a cluster with a profile
+sikifanso cluster create --profile agent-dev
 
-# Browse the AI infra catalog
-sikifanso catalog list
+# List the AI infra catalog
+sikifanso app list --all
 
-# Enable an LLM gateway
-sikifanso catalog enable litellm-proxy
+# Enable an additional tool
+sikifanso app enable tempo
 
-# Enable LLM tracing
-sikifanso catalog enable langfuse
-
-# Enable a vector database for RAG
-sikifanso catalog enable qdrant
-
-# Enable local model inference
-sikifanso catalog enable ollama
+# Create an isolated agent sandbox
+sikifanso agent create my-agent --cpu 1 --memory 1Gi
 
 # Check everything is healthy
-sikifanso doctor
+sikifanso cluster doctor
 ```
 
 After creation you'll see:
@@ -111,27 +109,42 @@ After creation you'll see:
 
 ## Deploying AI infra tools
 
-### From the catalog
+### Using profiles
 
-The bootstrap repo ships with a curated catalog of AI agent infrastructure tools. Enable one with a single command:
+Profiles enable a curated set of tools in one step:
 
 ```bash
-sikifanso catalog enable litellm-proxy
+# Minimal: LLM gateway + tracing
+sikifanso cluster create --profile agent-minimal
+
+# Full development stack
+sikifanso cluster create --profile agent-dev
+
+# Everything with guardrails
+sikifanso cluster create --profile agent-safe
+
+# Compose profiles
+sikifanso cluster create --profile agent-dev,rag
 ```
 
-This sets `enabled: true` in the catalog entry, commits the change, and triggers an ArgoCD sync.
+See `sikifanso cluster profiles` for the full list.
+
+### Enabling individual tools
 
 ```bash
-# Browse all catalog apps
-sikifanso catalog list
+# Enable a tool from the catalog
+sikifanso app enable litellm-proxy
 
-# Disable a catalog app
-sikifanso catalog disable litellm-proxy
+# Disable a tool
+sikifanso app disable litellm-proxy
+
+# Browse the full catalog
+sikifanso app list --all
 ```
 
 ### Custom Helm charts
 
-You can also deploy any Helm chart using the `app add` command:
+Deploy any Helm chart using the `app add` command:
 
 ```bash
 sikifanso app add podinfo \
@@ -157,13 +170,49 @@ langfuse             langfuse               1.2.14     observability catalog
 qdrant               qdrant                 0.13.2     rag          catalog
 ```
 
-Remove a custom app with `app remove`:
+Remove a custom app:
 
 ```bash
 sikifanso app remove podinfo
 ```
 
-You can also create the files manually under `apps/coordinates/` and `apps/values/` if you prefer -- see [Architecture](docs/architecture.md) for the file format.
+## Agent sandboxes
+
+Create isolated namespaces for running untrusted AI agent code:
+
+```bash
+# Create a sandbox with resource limits
+sikifanso agent create my-agent --cpu 1 --memory 1Gi --pods 20
+
+# List agents
+sikifanso agent list
+
+# Delete an agent
+sikifanso agent delete my-agent
+```
+
+Each sandbox gets resource quotas, Cilium network policies (default-deny egress, allowlisted data layer access), and its own service account.
+
+## MCP server
+
+Expose cluster operations as MCP tools for AI agents:
+
+```bash
+sikifanso mcp serve
+```
+
+25 tools across cluster management, catalog, agents, ArgoCD, Kubernetes, and health checks. Configure in Claude Code:
+
+```json
+{
+  "mcpServers": {
+    "sikifanso": {
+      "command": "sikifanso",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
+```
 
 ## CLI reference
 
@@ -176,7 +225,7 @@ sikifanso [global flags] <command> [command flags]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--cluster`, `-c` | `default` | Target cluster name |
-| `--log-file` | `sikifanso.log` | Path to log file |
+| `--output`, `-o` | `table` | Output format (`table`, `json`) |
 | `--log-level` | `info` | Console log level (debug, info, warn, error) |
 
 The `--cluster` flag can also be set via `SIKIFANSO_CLUSTER` env var.
@@ -185,32 +234,46 @@ The `--cluster` flag can also be set via `SIKIFANSO_CLUSTER` env var.
 
 | Command | Description |
 |---------|-------------|
-| `cluster create` | Create a new cluster |
+| **Cluster** | |
+| `cluster create` | Create a new cluster (with optional `--profile`) |
 | `cluster delete [NAME]` | Delete a cluster and clean up |
 | `cluster info [NAME]` | Show cluster details (omit name to list all) |
 | `cluster start [NAME]` | Start a stopped cluster |
 | `cluster stop [NAME]` | Stop a running cluster |
+| `cluster doctor` | Run health checks on the cluster |
+| `cluster dashboard` | Start the local web dashboard |
+| `cluster upgrade` | Upgrade Cilium and/or ArgoCD |
+| `cluster profiles` | List available profiles |
+| **Apps** | |
 | `app add [NAME]` | Add a custom Helm chart to the gitops repo |
-| `app list` | List installed apps (custom and catalog) |
-| `app remove NAME` | Remove a custom app from the gitops repo |
-| `catalog list` | List all catalog apps with enabled/disabled status |
-| `catalog enable NAME` | Enable a catalog app |
-| `catalog disable NAME` | Disable a catalog app |
-| `doctor` | Run health checks on the cluster and its components |
-| `status [NAME]` | Show cluster state, nodes, and pods |
-| `argocd sync` | Force immediate ArgoCD reconciliation |
-| `snapshot` | Capture cluster configuration state to a `.tar.gz` archive |
-| `restore NAME` | Restore a cluster from a snapshot |
-| `dashboard` | Start the local web dashboard |
-| `upgrade` | Upgrade cluster components (Cilium, ArgoCD) |
+| `app list` | List installed apps (`--all` for full catalog) |
+| `app remove NAME` | Remove a custom app |
+| `app enable NAME` | Enable a catalog app |
+| `app disable NAME` | Disable a catalog app |
+| `app sync` | Trigger ArgoCD sync |
+| `app status [APP]` | Show app status with resource tree |
+| `app diff APP` | Show diff between live and desired state |
+| `app logs APP` | Stream pod logs for an app |
+| `app rollback APP` | Roll back to a previous revision |
+| **Agents** | |
+| `agent create NAME` | Create an isolated agent namespace |
+| `agent list` | List agent namespaces |
+| `agent delete NAME` | Delete an agent namespace |
+| **Snapshots** | |
+| `snapshot capture` | Capture cluster configuration state |
+| `snapshot list` | List available snapshots |
+| `snapshot restore NAME` | Restore from a snapshot |
+| `snapshot delete NAME` | Delete a snapshot |
+| **MCP** | |
+| `mcp serve` | Start the MCP server (stdio) |
 
 ## Health checks
 
 ```bash
-sikifanso doctor
+sikifanso cluster doctor
 ```
 
-Runs a series of health checks against the cluster and prints a structured report. Checks Docker, k3d nodes, Cilium, Hubble, ArgoCD, and every enabled catalog app. Exits 0 when everything is healthy, 1 when any check fails.
+Runs a series of health checks against the cluster and prints a structured report. Checks Docker, k3d nodes, Cilium, Hubble, ArgoCD, every enabled catalog app, and agent namespaces. Exits 0 when everything is healthy, 1 when any check fails.
 
 ```
 ok  Docker daemon       running (v27.0.3)
@@ -222,7 +285,7 @@ ok  App: litellm-proxy  Healthy -- Synced
 ok  App: langfuse       Healthy -- Synced
 !!  App: qdrant          Degraded -- Synced
                          -> StatefulSet qdrant in namespace rag: replicas unavailable
-                         -> Try: sikifanso catalog disable qdrant
+                         -> Try: sikifanso app disable qdrant
 ```
 
 Each failure includes the root cause and a suggested fix command.
@@ -232,9 +295,9 @@ If no cluster session exists, `doctor` still runs the Docker check and reports t
 ## Snapshots
 
 ```bash
-sikifanso snapshot --name before-upgrade
+sikifanso snapshot capture --name before-upgrade
 sikifanso snapshot list
-sikifanso restore before-upgrade
+sikifanso snapshot restore before-upgrade
 ```
 
 Capture and restore cluster configuration state (session metadata + gitops repo). Snapshots are stored at `~/.sikifanso/snapshots/`.
@@ -242,7 +305,7 @@ Capture and restore cluster configuration state (session metadata + gitops repo)
 ## Dashboard
 
 ```bash
-sikifanso dashboard
+sikifanso cluster dashboard
 ```
 
 Starts a local web dashboard at `http://localhost:9090`. Opens your browser automatically.
@@ -252,12 +315,12 @@ Starts a local web dashboard at `http://localhost:9090`. Opens your browser auto
 Each cluster gets its own ports, kubeconfig context, gitops repo, and session:
 
 ```bash
-sikifanso cluster create --name lab1
-sikifanso cluster create --name lab2
+sikifanso cluster create --name lab1 --profile agent-dev
+sikifanso cluster create --name lab2 --profile agent-minimal
 
 # Deploy to a specific cluster
-sikifanso argocd sync --cluster lab1
-sikifanso argocd sync --cluster lab2
+sikifanso app sync --cluster lab1
+sikifanso app sync --cluster lab2
 
 # See all clusters
 sikifanso cluster info
@@ -280,9 +343,13 @@ Ports are auto-resolved -- if defaults (30080, 30081, etc.) are taken by the fir
     |   +-- values/
     |       +-- <app>.yaml    # Helm values overrides
     +-- catalog/              # AI agent infrastructure catalog
-        +-- <app>.yaml        # App definition with enabled flag
+    |   +-- <app>.yaml        # App definition with enabled flag
+    |   +-- values/
+    |       +-- <app>.yaml    # Helm values overrides
+    +-- agents/               # Agent sandbox definitions
+        +-- <agent>.yaml
         +-- values/
-            +-- <app>.yaml    # Helm values overrides
+            +-- <agent>.yaml
 ```
 
 The gitops directory is mounted into the k3d cluster at `/local-gitops` via a hostPath volume. ArgoCD's repo-server reads from it directly -- no remote git server needed.
@@ -292,7 +359,7 @@ Two root ApplicationSets manage the dual-track app model:
 - **root-app.yaml** watches `apps/coordinates/*.yaml` for custom Helm charts added via `app add`
 - **root-catalog.yaml** watches `catalog/*.yaml` and deploys only entries where `enabled: true`
 
-### How `argocd sync` works
+### How `app sync` works
 
 ArgoCD's default reconciliation interval is 180 seconds. The sync command bypasses this by sending a webhook push event (mimicking a GitHub push notification) to two endpoints:
 
