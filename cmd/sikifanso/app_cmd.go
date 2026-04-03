@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"slices"
 	"sort"
 	"strings"
 
@@ -19,6 +18,7 @@ import (
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
 	"golang.org/x/term"
+	"k8s.io/utils/ptr"
 )
 
 func appCmd() *cli.Command {
@@ -70,8 +70,15 @@ func appAddCmd() *cli.Command {
 
 func appListCmd() *cli.Command {
 	return &cli.Command{
-		Name:   "list",
-		Usage:  "List installed apps",
+		Name:  "list",
+		Usage: "List installed apps (use --all to include full catalog)",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:    "all",
+				Aliases: []string{"a"},
+				Usage:   "Show all catalog entries including disabled",
+			},
+		},
 		Action: withSession(appListAction),
 	}
 }
@@ -206,9 +213,33 @@ type appListItem struct {
 	Version   string `json:"version"`
 	Namespace string `json:"namespace"`
 	Source    string `json:"source"`
+	Enabled   *bool  `json:"enabled,omitempty"`
+}
+
+func buildAppListItems(apps []app.AppInfo, catalogEntries []catalog.Entry, showAll bool) []appListItem {
+	items := make([]appListItem, 0, len(apps)+len(catalogEntries))
+	for _, a := range apps {
+		item := appListItem{Name: a.Name, Chart: a.Chart, Version: a.Version, Namespace: a.Namespace, Source: "custom"}
+		if showAll {
+			item.Enabled = ptr.To(true)
+		}
+		items = append(items, item)
+	}
+	for _, e := range catalogEntries {
+		if showAll || e.Enabled {
+			item := appListItem{Name: e.Name, Chart: e.Chart, Version: e.TargetRevision, Namespace: e.Namespace, Source: "catalog"}
+			if showAll {
+				item.Enabled = ptr.To(e.Enabled)
+			}
+			items = append(items, item)
+		}
+	}
+	return items
 }
 
 func appListAction(_ context.Context, cmd *cli.Command, sess *session.Session) error {
+	showAll := cmd.Bool("all")
+
 	apps, err := app.List(sess.GitOpsPath)
 	if err != nil {
 		return fmt.Errorf("listing apps: %w", err)
@@ -219,38 +250,29 @@ func appListAction(_ context.Context, cmd *cli.Command, sess *session.Session) e
 		return fmt.Errorf("listing catalog: %w", err)
 	}
 
+	items := buildAppListItems(apps, catalogEntries, showAll)
+
 	if cmd.String("output") == outputFormatJSON {
-		items := make([]appListItem, 0, len(apps)+len(catalogEntries))
-		for _, a := range apps {
-			items = append(items, appListItem{Name: a.Name, Chart: a.Chart, Version: a.Version, Namespace: a.Namespace, Source: "custom"})
-		}
-		for _, e := range catalogEntries {
-			if e.Enabled {
-				items = append(items, appListItem{Name: e.Name, Chart: e.Chart, Version: e.TargetRevision, Namespace: e.Namespace, Source: "catalog"})
-			}
-		}
 		outputJSON(cmd, items)
 		return nil
 	}
 
-	hasEnabledCatalog := slices.ContainsFunc(catalogEntries, func(e catalog.Entry) bool {
-		return e.Enabled
-	})
-
-	if len(apps) == 0 && !hasEnabledCatalog {
-		fmt.Fprintln(os.Stderr, "No apps installed — add one with: sikifanso app add")
+	if len(items) == 0 {
+		fmt.Fprintln(os.Stderr, "No apps found — add one with: sikifanso app add")
 		return nil
 	}
 
 	headers := []string{"NAME", "CHART", "VERSION", "NAMESPACE", "SOURCE"}
-	rows := make([][]string, 0, len(apps)+len(catalogEntries))
-	for _, a := range apps {
-		rows = append(rows, []string{a.Name, a.Chart, a.Version, a.Namespace, "custom"})
+	if showAll {
+		headers = append(headers, "ENABLED")
 	}
-	for _, e := range catalogEntries {
-		if e.Enabled {
-			rows = append(rows, []string{e.Name, e.Chart, e.TargetRevision, e.Namespace, "catalog"})
+	rows := make([][]string, 0, len(items))
+	for _, item := range items {
+		row := []string{item.Name, item.Chart, item.Version, item.Namespace, item.Source}
+		if showAll {
+			row = append(row, fmt.Sprintf("%v", *item.Enabled))
 		}
+		rows = append(rows, row)
 	}
 	printTable(os.Stderr, headers, rows)
 	return nil
