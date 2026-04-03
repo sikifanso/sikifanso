@@ -270,7 +270,7 @@ func appListAction(_ context.Context, cmd *cli.Command, sess *session.Session) e
 	for _, item := range items {
 		row := []string{item.Name, item.Chart, item.Version, item.Namespace, item.Source}
 		if showAll {
-			row = append(row, fmt.Sprintf("%v", *item.Enabled))
+			row = append(row, fmt.Sprintf("%v", ptr.Deref(item.Enabled, false)))
 		}
 		rows = append(rows, row)
 	}
