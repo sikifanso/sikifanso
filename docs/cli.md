@@ -11,12 +11,14 @@ sikifanso [global flags] <command> [command flags]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--cluster`, `-c` | `default` | Target cluster name |
-| `--log-file` | `sikifanso.log` | Path to log file |
+| `--output`, `-o` | `table` | Output format (`table`, `json`) |
 | `--log-level` | `info` | Console log level (`debug`, `info`, `warn`, `error`) |
 
 The `--cluster` flag can also be set via the `SIKIFANSO_CLUSTER` environment variable.
 
-## Commands
+---
+
+## `cluster` -- Manage local Kubernetes clusters
 
 ### `cluster create`
 
@@ -25,16 +27,20 @@ Create a new k3d cluster with Cilium and ArgoCD pre-configured.
 ```bash
 sikifanso cluster create
 sikifanso cluster create --name mylab
-sikifanso cluster create --name mylab --bootstrap https://github.com/sikifanso/sikifanso-homelab-bootstrap.git
+sikifanso cluster create --profile agent-dev
+sikifanso cluster create --name mylab --profile agent-dev,rag
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--name` | `default` | Cluster name |
-| `--bootstrap` | sikifanso default | Bootstrap template repo URL |
+| `--bootstrap` | *(sikifanso default)* | Bootstrap template repo URL |
 | `--bootstrap-version` | *(match CLI version)* | Bootstrap repo tag to clone (empty string forces HEAD) |
+| `--profile` | *(none)* | Enable a predefined set of catalog apps (comma-separated for composition) |
 
 If flags are omitted, the CLI prompts interactively. For release builds using the default bootstrap repo, the CLI automatically pins to the matching bootstrap tag. Dev builds and custom bootstrap repos default to HEAD.
+
+See [Profiles](guides/profiles.md) for available profiles and composition.
 
 ### `cluster delete [NAME]`
 
@@ -51,7 +57,7 @@ sikifanso cluster delete mylab
 
 ### `cluster info [NAME]`
 
-Show cluster details. Omit the name to list all clusters.
+Show cluster details, credentials, and runtime health. Omit the name to list all clusters.
 
 ```bash
 sikifanso cluster info
@@ -88,9 +94,106 @@ sikifanso cluster stop mylab
 |----------|---------|-------------|
 | `NAME` | `default` | Cluster name to stop |
 
+### `cluster doctor`
+
+Run health checks on the cluster and its components. Exits 0 when all checks pass, 1 when any check fails.
+
+```bash
+sikifanso cluster doctor
+sikifanso cluster doctor --cluster mylab
+```
+
+Checks run in order:
+
+| Check | What it verifies |
+|-------|-----------------|
+| Docker daemon | Docker is reachable; reports version |
+| k3d cluster | All k3d nodes are in Ready state |
+| Cilium | `cilium` DaemonSet in `kube-system` is fully available |
+| Hubble | `hubble-relay` Deployment in `kube-system` is Available |
+| ArgoCD | Core deployments (`argocd-server`, `argocd-repo-server`, `argocd-applicationset-controller`) are Available |
+| Catalog apps | Each enabled catalog app's ArgoCD Application is Healthy and Synced |
+| Agents | Each agent namespace is properly deployed |
+
+Each failure includes a cause and a suggested fix command:
+
+```
+ok  Docker daemon       running (v27.0.3)
+ok  k3d cluster         1/1 nodes ready
+ok  Cilium              DaemonSet 1/1 ready
+ok  Hubble              relay deployment ready
+ok  ArgoCD              3/3 deployments ready
+!!  App: grafana         Degraded -- Synced
+                         -> Deployment grafana in namespace monitoring: replicas unavailable
+                         -> Try: sikifanso app disable grafana
+```
+
+If no cluster session exists, `doctor` runs the Docker check only and reports the missing cluster with a suggested `sikifanso cluster create` fix.
+
+### `cluster dashboard`
+
+Start the local web dashboard. Opens a browser automatically unless `--no-browser` is set. Press Ctrl+C to stop.
+
+```bash
+sikifanso cluster dashboard
+sikifanso cluster dashboard --addr :8080
+sikifanso cluster dashboard --no-browser
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--addr` | `:9090` | Listen address |
+| `--no-browser` | `false` | Don't open browser automatically |
+
+### `cluster upgrade`
+
+Upgrade cluster components (Cilium and ArgoCD). Takes a pre-upgrade snapshot by default. Without `--all`, shows subcommand help.
+
+```bash
+sikifanso cluster upgrade --all
+sikifanso cluster upgrade --all --skip-snapshot
+sikifanso cluster upgrade cilium
+sikifanso cluster upgrade argocd
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--all` | `false` | Upgrade all components |
+| `--skip-snapshot` | `false` | Skip pre-upgrade snapshot |
+
+#### `cluster upgrade cilium`
+
+Upgrade Cilium CNI only.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--skip-snapshot` | `false` | Skip pre-upgrade snapshot |
+
+#### `cluster upgrade argocd`
+
+Upgrade ArgoCD only.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--skip-snapshot` | `false` | Skip pre-upgrade snapshot |
+
+### `cluster profiles`
+
+List available cluster profiles for the `--profile` flag. Shows each profile's name, description, and included apps.
+
+```bash
+sikifanso cluster profiles
+```
+
+---
+
+## `app` -- Manage applications
+
+Unified management for both catalog apps and custom Helm charts.
+
 ### `app add [NAME]`
 
-Add a custom Helm chart to the gitops repo. Writes a coordinate file and a stub values file, auto-commits, and triggers an ArgoCD sync. For curated apps, use `catalog enable` instead.
+Add a custom Helm chart to the gitops repo. Writes a coordinate file and a stub values file, auto-commits, and triggers an ArgoCD sync. For curated apps, use `app enable` instead.
 
 ```bash
 sikifanso app add podinfo --repo https://stefanprodan.github.io/podinfo --chart podinfo --version 6.10.1 --namespace podinfo
@@ -103,44 +206,45 @@ sikifanso app add   # interactive — see below
 | `--chart` | *(app name)* | Chart name within the repository |
 | `--version` | `*` | Chart version (targetRevision) |
 | `--namespace` | *(app name)* | Kubernetes namespace to deploy into |
-| `--wait` | `false` | Wait for the app to reach Synced/Healthy after sync |
-| `--timeout` | `2m` | Timeout for `--wait` mode |
+| `--no-wait` | `false` | Trigger sync without waiting |
+| `--timeout` | `2m` | Timeout for sync wait |
 
 **Interactive mode** has two paths:
 
-- **No args, no flags, TTY** → launches a TUI catalog browser where you can toggle catalog apps on/off with a single keypress
-- **Name given but flags missing** → prompts for each missing field individually
-
-If all flags are provided, no prompts are shown.
+- **No args, no flags, TTY** -- launches a TUI catalog browser where you can toggle catalog apps on/off with a single keypress
+- **Name given but flags missing** -- prompts for each missing field individually
 
 Creates two files in the gitops repo:
 
-- `apps/coordinates/<name>.yaml` — Helm chart coordinates
-- `apps/values/<name>.yaml` — stub values file (`# Helm values for <name>`)
+- `apps/coordinates/<name>.yaml` -- Helm chart coordinates
+- `apps/values/<name>.yaml` -- stub values file
 
 ### `app list`
 
-List all installed apps in the current cluster's gitops repo. Shows both custom apps (from `apps/coordinates/`) and enabled catalog apps, with a `SOURCE` column to distinguish them.
+List all installed apps in the current cluster's gitops repo. Shows both custom apps and enabled catalog apps, with a `SOURCE` column to distinguish them.
 
 ```bash
 sikifanso app list
+sikifanso app list --all
 ```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--all`, `-a` | `false` | Show all catalog entries including disabled |
 
 ```
 NAME                 CHART                  VERSION    NAMESPACE    SOURCE
+litellm-proxy        litellm                0.2.1      gateway      catalog
+langfuse             langfuse               1.2.14     observability catalog
 podinfo              podinfo                6.10.1     podinfo      custom
-prometheus-stack     kube-prometheus-stack   82.4.3   monitoring   catalog
 ```
-
-No flags beyond the global `--cluster`.
 
 ### `app remove NAME`
 
-Remove a custom app from the gitops repo. Deletes the coordinate and values files, auto-commits, and triggers an ArgoCD sync. To disable a catalog app, use `catalog disable` instead.
+Remove a custom app from the gitops repo. Deletes the coordinate and values files, auto-commits, and triggers an ArgoCD sync. To disable a catalog app, use `app disable` instead.
 
 ```bash
 sikifanso app remove podinfo
-sikifanso app remove podinfo --wait
 ```
 
 | Argument | Description |
@@ -149,35 +253,17 @@ sikifanso app remove podinfo --wait
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--wait` | `false` | Wait for sync to complete after removal |
-| `--timeout` | `2m` | Timeout for `--wait` mode |
+| `--no-wait` | `false` | Trigger sync without waiting |
+| `--timeout` | `2m` | Timeout for sync wait |
 
 Shell completion is supported -- press Tab to see available app names.
 
-### `catalog list`
+### `app enable NAME`
 
-List all catalog apps with their enabled/disabled status.
-
-```bash
-sikifanso catalog list
-```
-
-```
-NAME                CATEGORY     ENABLED  DESCRIPTION
-alertmanager        monitoring   false    Alertmanager for Prometheus alerts
-grafana             monitoring   false    Grafana observability dashboards
-prometheus-stack    monitoring   true     Prometheus metrics collection and Grafana dashboards
-```
-
-Columns are: `NAME`, `CATEGORY`, `ENABLED`, `DESCRIPTION`. The `ENABLED` column is color-coded green/red.
-
-### `catalog enable NAME`
-
-Enable a catalog app. Sets `enabled: true` in the catalog entry, commits, and triggers an ArgoCD sync.
+Enable a catalog application. Sets `enabled: true` in the catalog entry, commits, and triggers an ArgoCD sync.
 
 ```bash
-sikifanso catalog enable prometheus-stack
-sikifanso catalog enable prometheus-stack --wait
+sikifanso app enable litellm-proxy
 ```
 
 | Argument | Description |
@@ -186,20 +272,17 @@ sikifanso catalog enable prometheus-stack --wait
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--wait` | `false` | Wait for the app to reach Synced/Healthy after sync |
-| `--timeout` | `2m` | Timeout for `--wait` mode |
+| `--no-wait` | `false` | Trigger sync without waiting |
+| `--timeout` | `2m` | Timeout for sync wait |
 
-If the app is already enabled, prints a message and does nothing. If the app name is not found, returns an error listing all available catalog apps.
+If the app is already enabled, prints a message and does nothing. Shell completion suggests disabled catalog app names.
 
-Shell completion is supported -- press Tab to see available catalog app names.
+### `app disable NAME`
 
-### `catalog disable NAME`
-
-Disable a catalog app. Sets `enabled: false` in the catalog entry, commits, and triggers an ArgoCD sync.
+Disable a catalog application. Sets `enabled: false` in the catalog entry, commits, and triggers an ArgoCD sync.
 
 ```bash
-sikifanso catalog disable prometheus-stack
-sikifanso catalog disable prometheus-stack --wait
+sikifanso app disable litellm-proxy
 ```
 
 | Argument | Description |
@@ -208,100 +291,160 @@ sikifanso catalog disable prometheus-stack --wait
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--wait` | `false` | Wait for sync to complete after disabling |
-| `--timeout` | `2m` | Timeout for `--wait` mode |
+| `--no-wait` | `false` | Trigger sync without waiting |
+| `--timeout` | `2m` | Timeout for sync wait |
 
-If the app is already disabled, prints a message and does nothing.
+If the app is already disabled, prints a message and does nothing. Shell completion suggests enabled catalog app names.
 
-Shell completion is supported -- press Tab to see currently enabled catalog app names.
+### `app sync`
 
-### `doctor`
-
-Run health checks on the cluster and its components. Exits 0 when all checks pass, 1 when any check fails.
+Trigger ArgoCD sync for all or specific applications. Bypasses the default 3-minute polling interval.
 
 ```bash
-sikifanso doctor
-sikifanso doctor --cluster mylab
+sikifanso app sync
+sikifanso app sync --app podinfo
+sikifanso app sync --no-wait
 ```
 
-Checks run in order:
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--no-wait` | `false` | Trigger sync without waiting for completion |
+| `--app` | *(none)* | Sync a specific application by name |
+| `--timeout` | `2m` | Timeout for sync wait |
+| `--skip-unhealthy` | `false` | Ignore pre-existing Degraded apps |
 
-| Check | What it verifies |
-|-------|-----------------|
-| Docker daemon | Docker is reachable; reports version |
-| k3d cluster | All k3d nodes are in Ready state |
-| Cilium | `cilium` DaemonSet in `kube-system` is fully available |
-| Hubble | `hubble-relay` Deployment in `kube-system` is Available |
-| ArgoCD | Core deployments (`argocd-server`, `argocd-repo-server`, `argocd-applicationset-controller`) are Available |
-| Apps | Each enabled catalog app's ArgoCD Application is Healthy and Synced |
+When `--app` is set, only that application is synced. By default, the command waits for all applications to reach Synced/Healthy or timeout.
 
-Each failure includes a cause and a suggested fix command:
+### `app status [APP]`
 
-```
-ok  Docker daemon       running (v27.0.3)
-ok  k3d cluster         1/1 nodes ready
-ok  Cilium              DaemonSet 1/1 ready
-ok  Hubble              relay deployment ready
-ok  ArgoCD              3/3 deployments ready
-!!  App: grafana         Degraded -- Synced
-                         -> Deployment grafana in namespace monitoring: replicas unavailable
-                         -> Try: sikifanso catalog disable grafana
-```
-
-If no cluster session exists (no cluster has been created), `doctor` runs the Docker check only and reports the missing cluster with a suggested `sikifanso cluster create` fix.
-
-No flags beyond the global `--cluster`.
-
-### `status [NAME]`
-
-Show cluster state, nodes, and pod summary. Omit the name to show all clusters.
+Show detailed application status with resource tree. Omit the app name to show all apps.
 
 ```bash
-sikifanso status
-sikifanso status mylab
+sikifanso app status
+sikifanso app status litellm-proxy
 ```
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `NAME` | *(all)* | Cluster name to inspect |
+| `APP` | *(all)* | Application name to inspect |
 
-Displays session metadata (state, creation time, node count), a node readiness table, and a per-namespace pod summary. If the cluster is not running, Kubernetes queries are skipped.
+### `app diff APP`
 
-### `argocd sync`
-
-Force immediate ArgoCD reconciliation. Bypasses the default 3-minute polling interval.
+Show diff between live and desired state for an application.
 
 ```bash
-sikifanso argocd sync
-sikifanso argocd sync --wait
-sikifanso argocd sync --app podinfo
-sikifanso argocd sync --cluster mylab
+sikifanso app diff litellm-proxy
 ```
+
+| Argument | Description |
+|----------|-------------|
+| `APP` | Application name (required) |
+
+### `app logs APP`
+
+Stream pod logs for an application.
+
+```bash
+sikifanso app logs litellm-proxy --pod litellm-proxy-0
+sikifanso app logs litellm-proxy --pod litellm-proxy-0 --follow
+```
+
+| Argument | Description |
+|----------|-------------|
+| `APP` | Application name (required) |
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--wait` | `false` | Wait for all apps to reach Synced/Healthy |
-| `--app` | *(none)* | Sync a specific application by name |
-| `--timeout` | `2m` | Timeout for `--wait` mode |
-| `--skip-unhealthy` | `false` | Skip syncing Degraded applications |
+| `--pod` | *(required)* | Pod name to fetch logs from |
+| `--container` | *(first)* | Container name (optional) |
+| `--follow`, `-f` | `false` | Stream logs continuously |
 
-When `--app` is set, only that application is synced. When `--wait` is set (without `--app`), the command blocks until all applications reach Synced/Healthy or the timeout expires.
+### `app rollback APP`
 
-### `snapshot`
+Roll back an application to a previous revision.
+
+```bash
+sikifanso app rollback litellm-proxy
+sikifanso app rollback litellm-proxy --revision 3
+```
+
+| Argument | Description |
+|----------|-------------|
+| `APP` | Application name (required) |
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--revision` | `0` | History revision ID to rollback to (0 = previous) |
+
+---
+
+## `agent` -- Manage isolated agent namespaces
+
+See [Agent Sandboxes](guides/agent-sandboxes.md) for a full guide.
+
+### `agent create NAME`
+
+Create an isolated agent namespace with resource quotas and network policies.
+
+```bash
+sikifanso agent create my-agent
+sikifanso agent create my-agent --cpu 1 --memory 1Gi --pods 20
+```
+
+| Argument | Description |
+|----------|-------------|
+| `NAME` | Agent name (required) |
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--cpu` | `500m` | CPU quota |
+| `--memory` | `512Mi` | Memory quota |
+| `--pods` | `10` | Max pods |
+| `--no-wait` | `false` | Trigger sync without waiting |
+| `--timeout` | `2m` | Timeout for sync wait |
+
+### `agent list`
+
+List all agent namespaces with their resource quotas.
+
+```bash
+sikifanso agent list
+```
+
+### `agent delete NAME`
+
+Delete an agent namespace and clean up all resources.
+
+```bash
+sikifanso agent delete my-agent
+```
+
+| Argument | Description |
+|----------|-------------|
+| `NAME` | Agent name to delete (required) |
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--no-wait` | `false` | Trigger sync without waiting |
+| `--timeout` | `2m` | Timeout for sync wait |
+
+---
+
+## `snapshot` -- Capture, restore, and manage cluster snapshots
+
+### `snapshot capture`
 
 Capture the cluster's configuration state (session metadata + gitops repo) into a `.tar.gz` archive stored at `~/.sikifanso/snapshots/`.
 
 ```bash
-sikifanso snapshot --name before-upgrade
-sikifanso snapshot list
-sikifanso snapshot delete old-snapshot
+sikifanso snapshot capture --name before-upgrade
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--name` | *(none)* | Snapshot name (required) |
+| `--name` | *(required)* | Snapshot name |
 
-#### `snapshot list`
+### `snapshot list`
 
 List all available snapshots. Shows name, cluster, creation time, and CLI version.
 
@@ -309,9 +452,21 @@ List all available snapshots. Shows name, cluster, creation time, and CLI versio
 sikifanso snapshot list
 ```
 
-No flags beyond the global `--cluster`.
+### `snapshot restore NAME`
 
-#### `snapshot delete NAME`
+Restore a cluster's configuration from a snapshot. This restores the session metadata and gitops repo only -- you must run `sikifanso cluster create` afterward to recreate the cluster infrastructure.
+
+```bash
+sikifanso snapshot restore before-upgrade
+```
+
+| Argument | Description |
+|----------|-------------|
+| `NAME` | Snapshot name to restore (required) |
+
+Shell completion is supported.
+
+### `snapshot delete NAME`
 
 Delete a snapshot archive.
 
@@ -323,78 +478,19 @@ sikifanso snapshot delete old-snapshot
 |----------|-------------|
 | `NAME` | Snapshot name to delete (required) |
 
-Shell completion is supported -- press Tab to see available snapshot names.
+Shell completion is supported.
 
-### `restore NAME`
+---
 
-Restore a cluster's configuration from a snapshot. This restores the session metadata and gitops repo only — you must run `sikifanso cluster create` afterward to recreate the cluster infrastructure.
+## `mcp serve`
 
-```bash
-sikifanso restore before-upgrade
-```
-
-| Argument | Description |
-|----------|-------------|
-| `NAME` | Snapshot name to restore (required) |
-
-Shell completion is supported -- press Tab to see available snapshot names.
-
-### `dashboard`
-
-Start the local web dashboard. Opens a browser automatically unless `--no-browser` is set. Press Ctrl+C to stop.
+Start the MCP (Model Context Protocol) server on stdio transport. See [MCP Server](guides/mcp-server.md) for setup and tool catalog.
 
 ```bash
-sikifanso dashboard
-sikifanso dashboard --addr :8080
-sikifanso dashboard --no-browser
+sikifanso mcp serve
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--addr` | `:9090` | Listen address |
-| `--no-browser` | `false` | Don't open browser automatically |
-
-### `upgrade`
-
-Upgrade cluster components (Cilium and ArgoCD). Takes a pre-upgrade snapshot by default. Without `--all`, shows subcommand help.
-
-```bash
-sikifanso upgrade --all
-sikifanso upgrade --all --skip-snapshot
-sikifanso upgrade cilium
-sikifanso upgrade argocd
-```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--all` | `false` | Upgrade all components |
-| `--skip-snapshot` | `false` | Skip pre-upgrade snapshot |
-
-#### `upgrade cilium`
-
-Upgrade Cilium CNI only.
-
-```bash
-sikifanso upgrade cilium
-sikifanso upgrade cilium --skip-snapshot
-```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--skip-snapshot` | `false` | Skip pre-upgrade snapshot |
-
-#### `upgrade argocd`
-
-Upgrade ArgoCD only.
-
-```bash
-sikifanso upgrade argocd
-sikifanso upgrade argocd --skip-snapshot
-```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--skip-snapshot` | `false` | Skip pre-upgrade snapshot |
+---
 
 ## Environment variables
 

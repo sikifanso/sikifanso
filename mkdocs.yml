@@ -1,6 +1,6 @@
 site_name: sikifanso
 site_url: https://sikifanso.com
-site_description: Bootstrap a fully functional homelab Kubernetes cluster with a single command
+site_description: Bootstrap Kubernetes clusters purpose-built for running AI agents safely
 repo_url: https://github.com/sikifanso/sikifanso
 repo_name: sikifanso/sikifanso
 
@@ -38,6 +38,9 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Guides:
+      - Profiles: guides/profiles.md
+      - Agent Sandboxes: guides/agent-sandboxes.md
+      - MCP Server: guides/mcp-server.md
       - Multi-Cluster: guides/multi-cluster.md
       - Custom Bootstrap Repos: guides/custom-bootstrap.md
       - Remote GitOps: guides/remote-gitops.md

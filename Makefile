@@ -1,6 +1,6 @@
 APP_NAME := sikifanso
 
-.PHONY: build run clean snapshot release-dry-run lint test test-integration vet fmt generate install
+.PHONY: build run clean snapshot release-dry-run lint test test-integration vet fmt generate install docs docs-serve
 
 # Build for your current platform
 build:
@@ -51,3 +51,11 @@ test:
 # Run integration tests
 test-integration:
 	go test -race -count=1 -tags=integration ./...
+
+# Build documentation site (output: site/)
+docs:
+	.venv/bin/zensical build
+
+# Serve docs locally with live reload (http://127.0.0.1:8000)
+docs-serve:
+	.venv/bin/zensical serve

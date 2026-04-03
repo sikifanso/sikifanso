@@ -31,8 +31,8 @@ Use the `--cluster` (or `-c`) flag to target commands at a specific cluster:
 
 ```bash
 # Sync a specific cluster
-sikifanso argocd sync --cluster lab1
-sikifanso argocd sync --cluster lab2
+sikifanso app sync --cluster lab1
+sikifanso app sync --cluster lab2
 
 # Stop / start a specific cluster
 sikifanso cluster stop lab1
@@ -43,7 +43,7 @@ You can also set the `SIKIFANSO_CLUSTER` environment variable to avoid passing t
 
 ```bash
 export SIKIFANSO_CLUSTER=lab1
-sikifanso argocd sync
+sikifanso app sync
 ```
 
 ## Listing all clusters
@@ -66,9 +66,9 @@ Deploy different apps to different clusters using the `--cluster` flag:
 
 ```bash
 # Enable a catalog app on lab1
-sikifanso catalog enable prometheus-stack --cluster lab1
+sikifanso app enable litellm-proxy --cluster lab1
 
-# Deploy a custom Helm chart to lab1
+# Deploy a custom Helm chart on lab1
 sikifanso app add podinfo \
   --repo https://stefanprodan.github.io/podinfo \
   --chart podinfo \
