@@ -21,36 +21,36 @@ var registry = map[string]Profile{
 	"agent-minimal": {
 		Name:        "agent-minimal",
 		Description: "Bare minimum to route and observe LLM calls",
-		Apps:        []string{"litellm-proxy", "langfuse", "postgresql"},
+		Apps:        []string{"litellm-proxy", "langfuse", "cnpg-operator", "postgresql"},
 	},
 	"agent-full": {
 		Name:        "agent-full",
 		Description: "All AI agent infrastructure tools enabled",
 		Apps: []string{
-			"litellm-proxy", "langfuse", "prometheus-stack", "loki", "tempo",
+			"litellm-proxy", "langfuse", "prometheus-stack", "loki", "tempo", "alloy",
 			"guardrails-ai", "nemo-guardrails", "presidio",
 			"qdrant", "text-embeddings-inference", "unstructured",
 			"temporal", "external-secrets", "opa",
-			"ollama", "postgresql", "valkey",
+			"ollama", "cnpg-operator", "postgresql", "valkey",
 		},
 	},
 	"agent-dev": {
 		Name:        "agent-dev",
 		Description: "Local development loop with LLM, RAG, and observability",
-		Apps:        []string{"litellm-proxy", "ollama", "langfuse", "qdrant", "postgresql", "valkey"},
+		Apps:        []string{"litellm-proxy", "ollama", "langfuse", "qdrant", "cnpg-operator", "postgresql", "valkey", "alloy"},
 	},
 	"agent-safe": {
 		Name:        "agent-safe",
 		Description: "Development stack with all guardrails and policy enforcement",
 		Apps: []string{
-			"litellm-proxy", "ollama", "langfuse", "qdrant", "postgresql", "valkey",
+			"litellm-proxy", "ollama", "langfuse", "qdrant", "cnpg-operator", "postgresql", "valkey",
 			"guardrails-ai", "nemo-guardrails", "presidio", "opa",
 		},
 	},
 	"rag": {
 		Name:        "rag",
 		Description: "RAG-focused stack with vector DB, embeddings, and document parsing",
-		Apps:        []string{"qdrant", "text-embeddings-inference", "unstructured", "postgresql"},
+		Apps:        []string{"qdrant", "text-embeddings-inference", "unstructured", "cnpg-operator", "postgresql"},
 	},
 }
 
