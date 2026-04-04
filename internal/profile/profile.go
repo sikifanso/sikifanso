@@ -21,7 +21,8 @@ var registry = map[string]Profile{
 	"agent-minimal": {
 		Name:        "agent-minimal",
 		Description: "Bare minimum to route and observe LLM calls",
-		Apps:        []string{"litellm-proxy", "langfuse", "cnpg-operator", "postgresql"},
+		// valkey is required: langfuse uses it as a Redis-compatible session cache
+		Apps: []string{"litellm-proxy", "langfuse", "cnpg-operator", "postgresql", "valkey"},
 	},
 	"agent-full": {
 		Name:        "agent-full",
