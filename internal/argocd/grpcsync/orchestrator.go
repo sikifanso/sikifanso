@@ -41,6 +41,9 @@ func (o *Orchestrator) SyncAndWait(ctx context.Context, req Request) ([]Result, 
 	if req.Timeout == 0 {
 		req.Timeout = DefaultTimeout
 	}
+	if req.DegradedGracePeriod == 0 {
+		req.DegradedGracePeriod = DefaultDegradedGracePeriod
+	}
 	req.Prune = true
 
 	ctx, cancel := context.WithTimeout(ctx, req.Timeout)
