@@ -37,7 +37,7 @@ var registry = map[string]Profile{
 	"agent-dev": {
 		Name:        "agent-dev",
 		Description: "Local development loop with LLM, RAG, and observability",
-		Apps:        []string{"litellm-proxy", "ollama", "langfuse", "qdrant", "alloy", "cnpg-operator", "postgresql", "valkey"},
+		Apps:        []string{"litellm-proxy", "ollama", "langfuse", "qdrant", "cnpg-operator", "postgresql", "valkey", "alloy"},
 	},
 	"agent-safe": {
 		Name:        "agent-safe",
