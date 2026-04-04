@@ -127,7 +127,7 @@ func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
 				} else {
 					orch := grpcsync.NewOrchestrator(client, zapLogger)
 					results, exitCode := orch.SyncAndWait(ctx, grpcsync.Request{
-						Apps:      profileApps,
+						Apps:      append(profileApps, autoAdded...),
 						Operation: grpcsync.OpEnable,
 						Prune:     true,
 						ReconcileFn: func(ctx context.Context) error {
