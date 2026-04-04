@@ -344,7 +344,7 @@ func appToggleAction(ctx context.Context, cmd *cli.Command, sess *session.Sessio
 		return fmt.Errorf("app name is required: sikifanso app %s NAME", verb)
 	}
 
-	force := cmd.Bool("force")
+	force := !enable && cmd.Bool("force")
 	result, err := catalog.ToggleWithDeps(sess.GitOpsPath, name, enable, force)
 	if err != nil {
 		return err

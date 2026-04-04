@@ -81,7 +81,7 @@ func applyProfileToCluster(ctx context.Context, deps *Deps, sess *session.Sessio
 		return "", fmt.Errorf("applying profile %q: %w", profileName, err)
 	}
 
-	result := fmt.Sprintf("Profile %q applied (%d apps enabled).", profileName, len(apps))
+	result := fmt.Sprintf("Profile %q applied (%d apps enabled).", profileName, len(apps)+len(autoAdded))
 	if len(autoAdded) > 0 {
 		result += fmt.Sprintf("\n  Auto-enabled dependencies: %s", strings.Join(autoAdded, ", "))
 	}

@@ -135,8 +135,18 @@ func Apply(gitOpsPath string, profileName string, apps []string, warn func(strin
 		return nil, fmt.Errorf("resolving dependencies: %w", err)
 	}
 
+	enabledSet := make(map[string]bool, len(all))
+	for _, e := range all {
+		if e.Enabled {
+			enabledSet[e.Name] = true
+		}
+	}
+
 	var committed []string
 	for _, app := range resolved {
+		if enabledSet[app] {
+			continue // already enabled — no-op
+		}
 		if err := catalog.SetEnabled(gitOpsPath, app, true); err != nil {
 			if warn != nil {
 				warn(fmt.Sprintf("skipping %s: %s", app, err))
