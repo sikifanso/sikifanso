@@ -320,7 +320,10 @@ func appDisableCmd() *cli.Command {
 		Name:      "disable",
 		Usage:     "Disable a catalog application",
 		ArgsUsage: "NAME",
-		Flags:     waitSyncFlags(),
+		Flags: append(waitSyncFlags(), &cli.BoolFlag{
+			Name:  "force",
+			Usage: "Bypass dependent-app safety check",
+		}),
 		Action: withSession(func(ctx context.Context, cmd *cli.Command, sess *session.Session) error {
 			return appToggleAction(ctx, cmd, sess, false)
 		}),
@@ -341,7 +344,8 @@ func appToggleAction(ctx context.Context, cmd *cli.Command, sess *session.Sessio
 		return fmt.Errorf("app name is required: sikifanso app %s NAME", verb)
 	}
 
-	result, err := catalog.Toggle(sess.GitOpsPath, name, enable)
+	force := cmd.Bool("force")
+	result, err := catalog.ToggleWithDeps(sess.GitOpsPath, name, enable, force)
 	if err != nil {
 		return err
 	}
@@ -350,15 +354,25 @@ func appToggleAction(ctx context.Context, cmd *cli.Command, sess *session.Sessio
 		return nil
 	}
 
+	if len(result.AutoDeps) > 0 {
+		fmt.Fprintf(os.Stderr, "auto-enabled: %s\n", strings.Join(result.AutoDeps, ", "))
+	}
+
 	fmt.Fprintf(os.Stderr, "%s committed to gitops repo\n", name)
 
 	op := grpcsync.OpEnable
 	if !enable {
 		op = grpcsync.OpDisable
 	}
+
+	syncApps := []string{name}
+	if len(result.AutoDeps) > 0 {
+		syncApps = append(result.AutoDeps, name)
+	}
+
 	if err := syncAfterMutation(ctx, cmd, sess, MutationOpts{
 		Operation:  op,
-		Apps:       []string{name},
+		Apps:       syncApps,
 		AppSetName: "catalog",
 	}); err != nil {
 		return err
