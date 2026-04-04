@@ -155,7 +155,7 @@ func TestApply_EnablesAppsOnDisk(t *testing.T) {
 
 	apps := []string{"litellm-proxy", "langfuse", "postgresql"}
 	var warnings []string
-	err := Apply(dir, "agent-minimal", apps, func(msg string) {
+	_, err := Apply(dir, "agent-minimal", apps, func(msg string) {
 		warnings = append(warnings, msg)
 	})
 	if err != nil {
@@ -202,7 +202,7 @@ func TestApply_SkipsMissingApps(t *testing.T) {
 	initGitRepo(t, dir)
 
 	var warnings []string
-	err := Apply(dir, "test", []string{"nonexistent", "postgresql"}, func(msg string) {
+	_, err := Apply(dir, "test", []string{"nonexistent", "postgresql"}, func(msg string) {
 		warnings = append(warnings, msg)
 	})
 	if err != nil {

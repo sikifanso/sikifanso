@@ -102,31 +102,78 @@ func Resolve(profileStr string) ([]string, error) {
 }
 
 // Apply enables the given apps in the catalog at gitOpsPath and commits the
-// changes in a single commit. Apps that don't exist in the catalog are skipped
-// with a warning via the provided warn function. The profileName is used in the
-// commit message for traceability.
+// changes in a single commit. Transitive dependencies are resolved and
+// auto-enabled. Returns the names of auto-added dependencies.
 //
-// Each SetEnabled call writes to disk independently. On partial failure,
-// successfully written files are committed; skipped apps are warned.
-// If Commit itself fails, the gitops worktree may be left dirty.
-func Apply(gitOpsPath string, profileName string, apps []string, warn func(string)) error {
-	var committed []string
+// Apps that don't exist in the catalog are skipped with a warning via the
+// provided warn function. The profileName is used in the commit message.
+func Apply(gitOpsPath string, profileName string, apps []string, warn func(string)) ([]string, error) {
+	all, err := catalog.List(gitOpsPath)
+	if err != nil {
+		return nil, fmt.Errorf("listing catalog: %w", err)
+	}
+
+	// Filter out apps that don't exist in the catalog — warn and skip.
+	catalogSet := make(map[string]bool, len(all))
+	for _, e := range all {
+		catalogSet[e.Name] = true
+	}
+	var known []string
 	for _, app := range apps {
+		if catalogSet[app] {
+			known = append(known, app)
+		} else if warn != nil {
+			warn(fmt.Sprintf("skipping %s: not found in catalog", app))
+		}
+	}
+	if len(known) == 0 {
+		return nil, nil
+	}
+
+	resolved, _, err := catalog.ResolveDeps(known, all)
+	if err != nil {
+		return nil, fmt.Errorf("resolving dependencies: %w", err)
+	}
+
+	knownSet := make(map[string]bool, len(known))
+	for _, k := range known {
+		knownSet[k] = true
+	}
+
+	enabledSet := make(map[string]bool, len(all))
+	for _, e := range all {
+		if e.Enabled {
+			enabledSet[e.Name] = true
+		}
+	}
+
+	var commitPaths []string
+	var autoAdded []string
+	for _, app := range resolved {
+		if enabledSet[app] {
+			continue // already enabled — no-op
+		}
 		if err := catalog.SetEnabled(gitOpsPath, app, true); err != nil {
 			if warn != nil {
 				warn(fmt.Sprintf("skipping %s: %s", app, err))
 			}
 			continue
 		}
-		committed = append(committed, fmt.Sprintf("catalog/%s.yaml", app))
+		commitPaths = append(commitPaths, fmt.Sprintf("catalog/%s.yaml", app))
+		if !knownSet[app] {
+			autoAdded = append(autoAdded, app)
+		}
 	}
 
-	if len(committed) == 0 {
-		return nil
+	if len(commitPaths) == 0 {
+		return nil, nil
 	}
 
 	msg := fmt.Sprintf("profile: enable %s apps", profileName)
-	return gitops.Commit(gitOpsPath, msg, committed...)
+	if err := gitops.Commit(gitOpsPath, msg, commitPaths...); err != nil {
+		return nil, err
+	}
+	return autoAdded, nil
 }
 
 // Names returns the sorted list of available profile names (for shell completion).

@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/appsetreconcile"
 	"github.com/alicanalbayrak/sikifanso/internal/kube"
@@ -73,13 +74,17 @@ func applyProfileToCluster(ctx context.Context, deps *Deps, sess *session.Sessio
 	}
 
 	var warnings []string
-	if err := profile.Apply(sess.GitOpsPath, profileName, apps, func(msg string) {
+	autoAdded, err := profile.Apply(sess.GitOpsPath, profileName, apps, func(msg string) {
 		warnings = append(warnings, msg)
-	}); err != nil {
+	})
+	if err != nil {
 		return "", fmt.Errorf("applying profile %q: %w", profileName, err)
 	}
 
-	result := fmt.Sprintf("Profile %q applied (%d apps enabled).", profileName, len(apps))
+	result := fmt.Sprintf("Profile %q applied (%d apps enabled).", profileName, len(apps)+len(autoAdded))
+	if len(autoAdded) > 0 {
+		result += fmt.Sprintf("\n  Auto-enabled dependencies: %s", strings.Join(autoAdded, ", "))
+	}
 	for _, w := range warnings {
 		result += fmt.Sprintf("\n  Warning: %s", w)
 	}

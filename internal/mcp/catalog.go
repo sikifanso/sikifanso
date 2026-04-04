@@ -110,7 +110,8 @@ func catalogToggle(ctx context.Context, deps *Deps, clusterName, appName string,
 		return r, sv, e
 	}
 
-	result, err := catalog.Toggle(sess.GitOpsPath, appName, enable)
+	// MCP has no --force equivalent — agents must disable dependents explicitly.
+	result, err := catalog.ToggleWithDeps(sess.GitOpsPath, appName, enable, false)
 	if err != nil {
 		return errResult(err)
 	}
@@ -119,5 +120,8 @@ func catalogToggle(ctx context.Context, deps *Deps, clusterName, appName string,
 	}
 
 	msg := fmt.Sprintf("%s %s and committed to gitops repo.", appName, past)
+	if len(result.AutoDeps) > 0 {
+		msg += fmt.Sprintf(" Auto-enabled dependencies: %s.", strings.Join(result.AutoDeps, ", "))
+	}
 	return textResult(appendSyncStatus(ctx, deps, sess, msg, "catalog"))
 }

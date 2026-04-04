@@ -14,14 +14,16 @@ import (
 
 // Entry represents a single application in the catalog.
 type Entry struct {
-	Name           string `json:"name"`
-	Category       string `json:"category"`
-	Description    string `json:"description"`
-	RepoURL        string `json:"repoURL"`
-	Chart          string `json:"chart"`
-	TargetRevision string `json:"targetRevision"`
-	Namespace      string `json:"namespace"`
-	Enabled        bool   `json:"enabled"`
+	Name           string   `json:"name"`
+	Category       string   `json:"category"`
+	Description    string   `json:"description"`
+	RepoURL        string   `json:"repoURL"`
+	Chart          string   `json:"chart"`
+	TargetRevision string   `json:"targetRevision"`
+	Namespace      string   `json:"namespace"`
+	Enabled        bool     `json:"enabled"`
+	Tier           string   `json:"tier,omitempty"`
+	DependsOn      []string `json:"dependsOn,omitempty"`
 }
 
 // CatalogDir returns the path to the catalog directory within gitOpsPath.
