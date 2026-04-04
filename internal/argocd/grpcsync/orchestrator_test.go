@@ -117,6 +117,35 @@ func TestSyncAndWait_DegradedThenHealthy(t *testing.T) {
 	}
 }
 
+// TestSyncAndWait_DegradedThenProgressing confirms that an app that transitions
+// Degraded→Progressing (pod restart) resets the grace timer so the timer cannot
+// fire against a non-Degraded state and produce a false ExitTimeout.
+func TestSyncAndWait_DegradedThenProgressing(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAppClient{
+		events: []grpcclient.WatchEvent{
+			{App: grpcclient.AppStatus{Name: "myapp", SyncStatus: "Synced", Health: "Degraded"}},
+			{App: grpcclient.AppStatus{Name: "myapp", SyncStatus: "Synced", Health: "Progressing"}},
+			{App: grpcclient.AppStatus{Name: "myapp", SyncStatus: "Synced", Health: "Healthy"}},
+		},
+		detail: &grpcclient.AppDetail{
+			AppStatus: grpcclient.AppStatus{Name: "myapp", SyncStatus: "Synced", Health: "Healthy"},
+		},
+	}
+	orch := &Orchestrator{client: fake, log: zap.NewNop()}
+	results, code := orch.SyncAndWait(context.Background(), Request{
+		Apps:                []string{"myapp"},
+		Timeout:             10 * time.Second,
+		DegradedGracePeriod: 50 * time.Millisecond, // very short to catch any timer leak
+	})
+	if code != ExitSuccess {
+		t.Fatalf("exit code = %v (%d), want ExitSuccess; results = %+v", code, code, results)
+	}
+	if results[0].Health != "Healthy" {
+		t.Errorf("results[0].Health = %q, want Healthy", results[0].Health)
+	}
+}
+
 // TestSyncAndWait_DegradedPersists confirms that an app that remains Degraded
 // for the full grace period is reported as ExitFailure with resource detail.
 func TestSyncAndWait_DegradedPersists(t *testing.T) {

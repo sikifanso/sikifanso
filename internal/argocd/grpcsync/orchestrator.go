@@ -260,6 +260,16 @@ func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, req Requ
 					graceCh = graceTimer.C
 				}
 				// Still within grace period — keep watching.
+
+			default:
+				// App moved out of Synced+Degraded (e.g. Progressing during pod
+				// restart) — cancel the timer so it doesn't fire against a state
+				// that is no longer Degraded.
+				if graceTimer != nil {
+					graceTimer.Stop()
+					graceTimer = nil
+					graceCh = nil
+				}
 			}
 		}
 	}
