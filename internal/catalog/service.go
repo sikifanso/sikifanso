@@ -78,8 +78,8 @@ func ToggleWithDeps(gitOpsPath, name string, enable, force bool) (*ToggleWithDep
 		return nil, err
 	}
 
-	if entry.Enabled == enable {
-		return &ToggleWithDepsResult{Name: name, Enabled: enable, NoChange: true}, nil
+	if !enable && !entry.Enabled {
+		return &ToggleWithDepsResult{Name: name, Enabled: false, NoChange: true}, nil
 	}
 
 	if enable {
@@ -122,14 +122,16 @@ func toggleWithDepsEnable(gitOpsPath, name string) (*ToggleWithDepsResult, error
 		}
 	}
 
-	if len(commitPaths) > 0 {
-		commitMsg := fmt.Sprintf("catalog: enable %s", name)
-		if len(actualAutoAdded) > 0 {
-			commitMsg += fmt.Sprintf(" (auto-deps: %s)", strings.Join(actualAutoAdded, ", "))
-		}
-		if err := gitops.Commit(gitOpsPath, commitMsg, commitPaths...); err != nil {
-			return nil, fmt.Errorf("committing changes: %w", err)
-		}
+	if len(commitPaths) == 0 {
+		return &ToggleWithDepsResult{Name: name, Enabled: true, NoChange: true}, nil
+	}
+
+	commitMsg := fmt.Sprintf("catalog: enable %s", name)
+	if len(actualAutoAdded) > 0 {
+		commitMsg += fmt.Sprintf(" (auto-deps: %s)", strings.Join(actualAutoAdded, ", "))
+	}
+	if err := gitops.Commit(gitOpsPath, commitMsg, commitPaths...); err != nil {
+		return nil, fmt.Errorf("committing changes: %w", err)
 	}
 
 	return &ToggleWithDepsResult{

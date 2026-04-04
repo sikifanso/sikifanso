@@ -130,9 +130,14 @@ func Apply(gitOpsPath string, profileName string, apps []string, warn func(strin
 		return nil, nil
 	}
 
-	resolved, autoAdded, err := catalog.ResolveDeps(known, all)
+	resolved, _, err := catalog.ResolveDeps(known, all)
 	if err != nil {
 		return nil, fmt.Errorf("resolving dependencies: %w", err)
+	}
+
+	knownSet := make(map[string]bool, len(known))
+	for _, k := range known {
+		knownSet[k] = true
 	}
 
 	enabledSet := make(map[string]bool, len(all))
@@ -142,7 +147,8 @@ func Apply(gitOpsPath string, profileName string, apps []string, warn func(strin
 		}
 	}
 
-	var committed []string
+	var commitPaths []string
+	var autoAdded []string
 	for _, app := range resolved {
 		if enabledSet[app] {
 			continue // already enabled — no-op
@@ -153,15 +159,18 @@ func Apply(gitOpsPath string, profileName string, apps []string, warn func(strin
 			}
 			continue
 		}
-		committed = append(committed, fmt.Sprintf("catalog/%s.yaml", app))
+		commitPaths = append(commitPaths, fmt.Sprintf("catalog/%s.yaml", app))
+		if !knownSet[app] {
+			autoAdded = append(autoAdded, app)
+		}
 	}
 
-	if len(committed) == 0 {
+	if len(commitPaths) == 0 {
 		return nil, nil
 	}
 
 	msg := fmt.Sprintf("profile: enable %s apps", profileName)
-	if err := gitops.Commit(gitOpsPath, msg, committed...); err != nil {
+	if err := gitops.Commit(gitOpsPath, msg, commitPaths...); err != nil {
 		return nil, err
 	}
 	return autoAdded, nil
