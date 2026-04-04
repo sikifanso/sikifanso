@@ -27,7 +27,7 @@ var registry = map[string]Profile{
 		Name:        "agent-full",
 		Description: "All AI agent infrastructure tools enabled",
 		Apps: []string{
-			"litellm-proxy", "langfuse", "prometheus-stack", "loki", "tempo",
+			"litellm-proxy", "langfuse", "prometheus-stack", "loki", "tempo", "alloy",
 			"guardrails-ai", "nemo-guardrails", "presidio",
 			"qdrant", "text-embeddings-inference", "unstructured",
 			"temporal", "external-secrets", "opa",
@@ -37,7 +37,7 @@ var registry = map[string]Profile{
 	"agent-dev": {
 		Name:        "agent-dev",
 		Description: "Local development loop with LLM, RAG, and observability",
-		Apps:        []string{"litellm-proxy", "ollama", "langfuse", "qdrant", "cnpg-operator", "postgresql", "valkey"},
+		Apps:        []string{"litellm-proxy", "ollama", "langfuse", "qdrant", "alloy", "cnpg-operator", "postgresql", "valkey"},
 	},
 	"agent-safe": {
 		Name:        "agent-safe",
