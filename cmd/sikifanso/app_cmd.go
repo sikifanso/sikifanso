@@ -367,7 +367,7 @@ func appToggleAction(ctx context.Context, cmd *cli.Command, sess *session.Sessio
 
 	syncApps := []string{name}
 	if len(result.AutoDeps) > 0 {
-		syncApps = append(result.AutoDeps, name)
+		syncApps = append(append([]string{}, result.AutoDeps...), name)
 	}
 
 	if err := syncAfterMutation(ctx, cmd, sess, MutationOpts{

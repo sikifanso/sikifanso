@@ -61,10 +61,10 @@ func Flip(gitOpsPath, name string) (*ToggleResult, error) {
 
 // ToggleWithDepsResult describes the outcome of a ToggleWithDeps operation.
 type ToggleWithDepsResult struct {
-	Name      string
-	Enabled   bool
-	NoChange  bool
-	AutoDeps  []string // dep names that were auto-enabled (enable path only)
+	Name     string
+	Enabled  bool
+	NoChange bool
+	AutoDeps []string // dep names that were auto-enabled (enable path only)
 }
 
 // ToggleWithDeps is like Toggle but resolves transitive dependencies.

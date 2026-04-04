@@ -113,7 +113,24 @@ func Apply(gitOpsPath string, profileName string, apps []string, warn func(strin
 		return nil, fmt.Errorf("listing catalog: %w", err)
 	}
 
-	resolved, autoAdded, err := catalog.ResolveDeps(apps, all)
+	// Filter out apps that don't exist in the catalog — warn and skip.
+	catalogSet := make(map[string]bool, len(all))
+	for _, e := range all {
+		catalogSet[e.Name] = true
+	}
+	var known []string
+	for _, app := range apps {
+		if catalogSet[app] {
+			known = append(known, app)
+		} else if warn != nil {
+			warn(fmt.Sprintf("skipping %s: not found in catalog", app))
+		}
+	}
+	if len(known) == 0 {
+		return nil, nil
+	}
+
+	resolved, autoAdded, err := catalog.ResolveDeps(known, all)
 	if err != nil {
 		return nil, fmt.Errorf("resolving dependencies: %w", err)
 	}
