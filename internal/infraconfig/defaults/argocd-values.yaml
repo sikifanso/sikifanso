@@ -75,6 +75,7 @@ applicationSet:
   enabled: true
   extraArgs:
     - "--repo-server-plaintext"
+    - "--enable-progressive-syncs"
   resources:
     requests:
       cpu: 25m
