@@ -194,11 +194,23 @@ func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, req Requ
 
 		case <-graceCh:
 			// Grace period elapsed while app remained Synced+Degraded.
-			// Fetch the current state (includes per-resource detail) and exit as failure.
+			// If the overall context also expired at the same time, let ctx.Done() own
+			// the result — ExitTimeout is more accurate than ExitFailure in that case.
+			if ctx.Err() != nil {
+				return
+			}
 			detail, detailErr := o.client.GetApplication(ctx, name)
 			if detailErr != nil {
 				o.log.Warn("GetApplication after grace period failed",
 					zap.String("app", name), zap.Error(detailErr))
+				// Still update so watchApps scores ExitFailure with a visible message
+				// rather than using the stale zero-Resources watch-event result.
+				updateFn(Result{
+					App:        name,
+					SyncStatus: "Synced",
+					Health:     "Degraded",
+					Message:    "grace period elapsed; resource detail unavailable",
+				})
 				return
 			}
 			updateFn(Result{
