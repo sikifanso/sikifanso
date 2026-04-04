@@ -41,6 +41,9 @@ func clusterCreateCmd() *cli.Command {
 }
 
 func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
+	if err := rejectPositionalArgs(cmd); err != nil {
+		return err
+	}
 	name := cmd.String("cluster")
 	if !cmd.IsSet("cluster") {
 		name = prompt.String("Cluster name", defaultClusterName)
