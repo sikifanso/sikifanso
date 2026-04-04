@@ -92,10 +92,14 @@ func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
 	// Apply profile after cluster creation — enables catalog apps and commits.
 	if len(profileApps) > 0 {
 		zapLogger.Info("applying profile", zap.String("profile", profileStr), zap.Strings("apps", profileApps))
-		if err := profile.Apply(sess.GitOpsPath, profileStr, profileApps, func(msg string) {
+		autoAdded, err := profile.Apply(sess.GitOpsPath, profileStr, profileApps, func(msg string) {
 			zapLogger.Warn(msg)
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("applying profile: %w", err)
+		}
+		if len(autoAdded) > 0 {
+			zapLogger.Info("auto-enabled dependencies", zap.Strings("deps", autoAdded))
 		}
 		// Trigger ArgoCD sync so enabled apps deploy immediately.
 		client, connErr := grpcclient.FromSessionCreds(ctx,

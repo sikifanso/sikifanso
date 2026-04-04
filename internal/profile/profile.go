@@ -102,16 +102,24 @@ func Resolve(profileStr string) ([]string, error) {
 }
 
 // Apply enables the given apps in the catalog at gitOpsPath and commits the
-// changes in a single commit. Apps that don't exist in the catalog are skipped
-// with a warning via the provided warn function. The profileName is used in the
-// commit message for traceability.
+// changes in a single commit. Transitive dependencies are resolved and
+// auto-enabled. Returns the names of auto-added dependencies.
 //
-// Each SetEnabled call writes to disk independently. On partial failure,
-// successfully written files are committed; skipped apps are warned.
-// If Commit itself fails, the gitops worktree may be left dirty.
-func Apply(gitOpsPath string, profileName string, apps []string, warn func(string)) error {
+// Apps that don't exist in the catalog are skipped with a warning via the
+// provided warn function. The profileName is used in the commit message.
+func Apply(gitOpsPath string, profileName string, apps []string, warn func(string)) ([]string, error) {
+	all, err := catalog.List(gitOpsPath)
+	if err != nil {
+		return nil, fmt.Errorf("listing catalog: %w", err)
+	}
+
+	resolved, autoAdded, err := catalog.ResolveDeps(apps, all)
+	if err != nil {
+		return nil, fmt.Errorf("resolving dependencies: %w", err)
+	}
+
 	var committed []string
-	for _, app := range apps {
+	for _, app := range resolved {
 		if err := catalog.SetEnabled(gitOpsPath, app, true); err != nil {
 			if warn != nil {
 				warn(fmt.Sprintf("skipping %s: %s", app, err))
@@ -122,11 +130,14 @@ func Apply(gitOpsPath string, profileName string, apps []string, warn func(strin
 	}
 
 	if len(committed) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	msg := fmt.Sprintf("profile: enable %s apps", profileName)
-	return gitops.Commit(gitOpsPath, msg, committed...)
+	if err := gitops.Commit(gitOpsPath, msg, committed...); err != nil {
+		return nil, err
+	}
+	return autoAdded, nil
 }
 
 // Names returns the sorted list of available profile names (for shell completion).
