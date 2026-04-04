@@ -35,12 +35,4 @@ func TestDegradedGracePeriodDefault(t *testing.T) {
 	if DefaultDegradedGracePeriod != 60*time.Second {
 		t.Fatalf("DefaultDegradedGracePeriod = %v, want 60s", DefaultDegradedGracePeriod)
 	}
-	req := Request{Timeout: DefaultTimeout}
-	// Simulate the defaults block in SyncAndWait.
-	if req.DegradedGracePeriod == 0 {
-		req.DegradedGracePeriod = DefaultDegradedGracePeriod
-	}
-	if req.DegradedGracePeriod != 60*time.Second {
-		t.Fatalf("DegradedGracePeriod after default = %v, want 60s", req.DegradedGracePeriod)
-	}
 }

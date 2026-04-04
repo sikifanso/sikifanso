@@ -34,9 +34,8 @@ type Request struct {
 	Operation     OperationType
 	OnProgress    ProgressFn                      // optional, called on each state change
 	ReconcileFn   func(ctx context.Context) error // triggers AppSet reconciliation
-	// DegradedGracePeriod is the maximum time watchSingleApp waits after first
-	// observing Synced+Degraded before declaring the app failed. A zero value is
-	// replaced by DefaultDegradedGracePeriod in SyncAndWait.
+	// DegradedGracePeriod is how long SyncAndWait tolerates Synced+Degraded before
+	// reporting failure. Zero is replaced by DefaultDegradedGracePeriod.
 	DegradedGracePeriod time.Duration
 }
 
