@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// ResolveDeps performs BFS transitive dependency resolution. Given a set of
+// ResolveDeps performs DFS transitive dependency resolution. Given a set of
 // requested app names and all catalog entries, it returns:
 //   - resolved: the full ordered set (deps before dependents)
 //   - autoAdded: names that were not in the original requested set
@@ -48,7 +48,7 @@ func ResolveDeps(requested []string, all []Entry) (resolved, autoAdded []string,
 
 		state[name] = visiting
 		for _, dep := range entry.DependsOn {
-			if err := visit(dep, append(path, name)); err != nil {
+			if err := visit(dep, append(append([]string{}, path...), name)); err != nil {
 				return err
 			}
 		}
