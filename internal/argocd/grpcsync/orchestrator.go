@@ -10,10 +10,19 @@ import (
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 )
 
+// appClient is the subset of *grpcclient.Client methods used by Orchestrator.
+// Keeping it as an interface allows unit tests to inject a fake implementation.
+type appClient interface {
+	WatchApplication(ctx context.Context, name string) (<-chan grpcclient.WatchEvent, error)
+	GetApplication(ctx context.Context, name string) (*grpcclient.AppDetail, error)
+	SyncApplication(ctx context.Context, name string, opts grpcclient.SyncOptions) error
+	ResourceTree(ctx context.Context, name string) ([]grpcclient.ResourceStatus, error)
+}
+
 // Orchestrator manages sync-and-watch operations for one or more ArgoCD applications
 // using the gRPC Watch stream for real-time feedback.
 type Orchestrator struct {
-	client *grpcclient.Client
+	client appClient
 	log    *zap.Logger
 }
 
