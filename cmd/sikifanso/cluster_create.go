@@ -6,10 +6,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/appsetreconcile"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcsync"
 	"github.com/alicanalbayrak/sikifanso/internal/cluster"
 	"github.com/alicanalbayrak/sikifanso/internal/gitops"
+	"github.com/alicanalbayrak/sikifanso/internal/kube"
 	"github.com/alicanalbayrak/sikifanso/internal/preflight"
 	"github.com/alicanalbayrak/sikifanso/internal/profile"
 	"github.com/alicanalbayrak/sikifanso/internal/prompt"
@@ -102,6 +104,10 @@ func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
 			zapLogger.Info("auto-enabled dependencies", zap.Strings("deps", autoAdded))
 		}
 		// Trigger ArgoCD sync so enabled apps deploy immediately.
+		// Use OpEnable: the catalog ApplicationSet hasn't reconciled yet, so the
+		// newly-enabled app CRs don't exist — OpSync against ListApplications would
+		// find nothing. OpEnable with ReconcileFn patches the AppSet annotation,
+		// waits for each CR to appear, then watches for Synced+Healthy.
 		client, connErr := grpcclient.FromSessionCreds(ctx,
 			sess.Services.ArgoCD.URL,
 			sess.Services.ArgoCD.Username,
@@ -111,17 +117,23 @@ func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
 			zapLogger.Warn("post-profile sync unavailable", zap.Error(connErr))
 		} else {
 			defer client.Close()
-			orch := grpcsync.NewOrchestrator(client, zapLogger)
-			listed, listErr := client.ListApplications(ctx)
-			if listErr != nil {
-				zapLogger.Warn("listing apps for post-profile sync failed", zap.Error(listErr))
+			restCfg, kubeErr := kube.RESTConfigForCluster(sess.ClusterName)
+			if kubeErr != nil {
+				zapLogger.Warn("post-profile sync: kube config unavailable", zap.Error(kubeErr))
 			} else {
-				names := make([]string, 0, len(listed))
-				for _, a := range listed {
-					names = append(names, a.Name)
-				}
-				if len(names) > 0 {
-					results, exitCode := orch.SyncAndWait(ctx, grpcsync.Request{Apps: names, Prune: true})
+				reconciler, recErr := appsetreconcile.NewReconciler(restCfg, "argocd")
+				if recErr != nil {
+					zapLogger.Warn("post-profile sync: reconciler unavailable", zap.Error(recErr))
+				} else {
+					orch := grpcsync.NewOrchestrator(client, zapLogger)
+					results, exitCode := orch.SyncAndWait(ctx, grpcsync.Request{
+						Apps:      profileApps,
+						Operation: grpcsync.OpEnable,
+						Prune:     true,
+						ReconcileFn: func(ctx context.Context) error {
+							return reconciler.Trigger(ctx, "catalog")
+						},
+					})
 					printSyncResults(os.Stderr, results)
 					if exitCode != grpcsync.ExitSuccess {
 						zapLogger.Warn("post-profile sync did not fully succeed", zap.Int("exitCode", int(exitCode)))
