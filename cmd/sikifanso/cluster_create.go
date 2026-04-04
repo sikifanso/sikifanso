@@ -23,11 +23,6 @@ func clusterCreateCmd() *cli.Command {
 		Usage: "Create a new k3d cluster",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:  "name",
-				Usage: "Cluster name",
-				Value: defaultClusterName,
-			},
-			&cli.StringFlag{
 				Name:  "bootstrap",
 				Usage: "Bootstrap template repo URL",
 				Value: gitops.DefaultBootstrapURL,
@@ -46,8 +41,11 @@ func clusterCreateCmd() *cli.Command {
 }
 
 func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
-	name := cmd.String("name")
-	if !cmd.IsSet("name") {
+	if err := rejectPositionalArgs(cmd); err != nil {
+		return err
+	}
+	name := cmd.String("cluster")
+	if !cmd.IsSet("cluster") {
 		name = prompt.String("Cluster name", defaultClusterName)
 	}
 

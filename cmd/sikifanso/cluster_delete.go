@@ -11,19 +11,17 @@ import (
 
 func clusterDeleteCmd() *cli.Command {
 	return &cli.Command{
-		Name:          "delete",
-		Usage:         "Delete an existing k3d cluster",
-		ArgsUsage:     "[NAME]",
-		Action:        clusterDeleteAction,
-		ShellComplete: clusterNameShellComplete,
+		Name:   "delete",
+		Usage:  "Delete an existing k3d cluster",
+		Action: clusterDeleteAction,
 	}
 }
 
 func clusterDeleteAction(ctx context.Context, cmd *cli.Command) error {
-	name := defaultClusterName
-	if cmd.Args().Present() {
-		name = cmd.Args().First()
+	if err := rejectPositionalArgs(cmd); err != nil {
+		return err
 	}
+	name := cmd.String("cluster")
 
 	zapLogger.Info("running preflight checks")
 	if err := preflight.CheckDocker(ctx); err != nil {

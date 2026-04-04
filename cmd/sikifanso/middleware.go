@@ -18,6 +18,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// rejectPositionalArgs returns an error when a command receives unexpected
+// positional arguments, guiding the user toward the global --cluster flag.
+func rejectPositionalArgs(cmd *cli.Command) error {
+	if cmd.Args().Present() {
+		return fmt.Errorf("unexpected argument %q; use --cluster/-c to specify the cluster name", cmd.Args().First())
+	}
+	return nil
+}
+
 // wrapAction adds timing and structured logging to any command action.
 func wrapAction(action cli.ActionFunc) cli.ActionFunc {
 	return func(ctx context.Context, cmd *cli.Command) error {
