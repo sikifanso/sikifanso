@@ -11,19 +11,17 @@ import (
 
 func clusterStartCmd() *cli.Command {
 	return &cli.Command{
-		Name:          "start",
-		Usage:         "Start a stopped k3d cluster",
-		ArgsUsage:     "[NAME]",
-		Action:        clusterStartAction,
-		ShellComplete: clusterNameShellComplete,
+		Name:   "start",
+		Usage:  "Start a stopped k3d cluster",
+		Action: clusterStartAction,
 	}
 }
 
 func clusterStartAction(ctx context.Context, cmd *cli.Command) error {
-	name := defaultClusterName
-	if cmd.Args().Present() {
-		name = cmd.Args().First()
+	if err := rejectPositionalArgs(cmd); err != nil {
+		return err
 	}
+	name := cmd.String("cluster")
 
 	zapLogger.Info("running preflight checks")
 	if err := preflight.CheckDocker(ctx); err != nil {

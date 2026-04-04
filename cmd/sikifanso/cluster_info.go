@@ -17,18 +17,20 @@ import (
 
 func clusterInfoCmd() *cli.Command {
 	return &cli.Command{
-		Name:          "info",
-		Usage:         "Show cluster details, credentials, and runtime health",
-		ArgsUsage:     "[NAME]",
-		Action:        clusterInfoAction,
-		ShellComplete: clusterNameShellComplete,
+		Name:   "info",
+		Usage:  "Show cluster details, credentials, and runtime health",
+		Action: clusterInfoAction,
 	}
 }
 
 func clusterInfoAction(ctx context.Context, cmd *cli.Command) error {
-	// If a name is given, show only that cluster.
-	if cmd.Args().Present() {
-		return showClusterInfo(ctx, cmd, cmd.Args().First())
+	if err := rejectPositionalArgs(cmd); err != nil {
+		return err
+	}
+
+	// If --cluster is explicitly set, show only that cluster.
+	if cmd.IsSet("cluster") {
+		return showClusterInfo(ctx, cmd, cmd.String("cluster"))
 	}
 
 	// No name — show all clusters.

@@ -11,19 +11,17 @@ import (
 
 func clusterStopCmd() *cli.Command {
 	return &cli.Command{
-		Name:          "stop",
-		Usage:         "Stop a running k3d cluster",
-		ArgsUsage:     "[NAME]",
-		Action:        clusterStopAction,
-		ShellComplete: clusterNameShellComplete,
+		Name:   "stop",
+		Usage:  "Stop a running k3d cluster",
+		Action: clusterStopAction,
 	}
 }
 
 func clusterStopAction(ctx context.Context, cmd *cli.Command) error {
-	name := defaultClusterName
-	if cmd.Args().Present() {
-		name = cmd.Args().First()
+	if err := rejectPositionalArgs(cmd); err != nil {
+		return err
 	}
+	name := cmd.String("cluster")
 
 	zapLogger.Info("running preflight checks")
 	if err := preflight.CheckDocker(ctx); err != nil {
