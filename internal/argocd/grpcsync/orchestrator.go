@@ -10,10 +10,19 @@ import (
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 )
 
+// appClient is the subset of *grpcclient.Client methods used by Orchestrator.
+// Keeping it as an interface allows unit tests to inject a fake implementation.
+type appClient interface {
+	WatchApplication(ctx context.Context, name string) (<-chan grpcclient.WatchEvent, error)
+	GetApplication(ctx context.Context, name string) (*grpcclient.AppDetail, error)
+	SyncApplication(ctx context.Context, name string, opts grpcclient.SyncOptions) error
+	ResourceTree(ctx context.Context, name string) ([]grpcclient.ResourceStatus, error)
+}
+
 // Orchestrator manages sync-and-watch operations for one or more ArgoCD applications
 // using the gRPC Watch stream for real-time feedback.
 type Orchestrator struct {
-	client *grpcclient.Client
+	client appClient
 	log    *zap.Logger
 }
 
@@ -31,6 +40,9 @@ func NewOrchestrator(client *grpcclient.Client, log *zap.Logger) *Orchestrator {
 func (o *Orchestrator) SyncAndWait(ctx context.Context, req Request) ([]Result, ExitCode) {
 	if req.Timeout == 0 {
 		req.Timeout = DefaultTimeout
+	}
+	if req.DegradedGracePeriod == 0 {
+		req.DegradedGracePeriod = DefaultDegradedGracePeriod
 	}
 	req.Prune = true
 
@@ -147,10 +159,14 @@ func (o *Orchestrator) watchApps(ctx context.Context, req Request, fn watchFn) (
 
 // watchSingleApp opens a Watch stream for appName and calls updateFn on every
 // event until the app reaches a terminal state or ctx is cancelled.
-// On stream error it falls back to a single pollOnce call.
-// FIX: Don't exit on Degraded immediately. Only exit on Degraded if the app is
-// also Synced (meaning the sync completed but the app is broken). If the app is
-// OutOfSync+Degraded, keep waiting.
+//
+// Terminal states:
+//   - Synced+Healthy → success
+//   - Synced+Degraded persisting for req.DegradedGracePeriod → failure (resources fetched)
+//   - Deleted → deleted
+//   - ctx cancelled → caller handles via ExitTimeout
+//
+// On stream error the function falls back to a single pollOnce call.
 func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, req Request, updateFn func(Result)) {
 	eventCh, err := o.client.WatchApplication(ctx, name)
 	if err != nil {
@@ -159,9 +175,51 @@ func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, req Requ
 		return
 	}
 
+	// graceTimer is started on the first Synced+Degraded observation.
+	// A nil graceCh blocks forever in the select — effectively disabled until set.
+	var (
+		graceTimer *time.Timer
+		graceCh    <-chan time.Time
+	)
+	defer func() {
+		if graceTimer != nil {
+			graceTimer.Stop()
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
+			return
+
+		case <-graceCh:
+			// Grace period elapsed while app remained Synced+Degraded.
+			// If the overall context also expired at the same time, let ctx.Done() own
+			// the result — ExitTimeout is more accurate than ExitFailure in that case.
+			if ctx.Err() != nil {
+				return
+			}
+			detail, detailErr := o.client.GetApplication(ctx, name)
+			if detailErr != nil {
+				o.log.Warn("GetApplication after grace period failed",
+					zap.String("app", name), zap.Error(detailErr))
+				// Still update so watchApps scores ExitFailure with a visible message
+				// rather than using the stale zero-Resources watch-event result.
+				updateFn(Result{
+					App:        name,
+					SyncStatus: "Synced",
+					Health:     "Degraded",
+					Message:    "grace period elapsed; resource detail unavailable",
+				})
+				return
+			}
+			updateFn(Result{
+				App:        name,
+				SyncStatus: detail.SyncStatus,
+				Health:     detail.Health,
+				Message:    detail.Message,
+				Resources:  detail.Resources,
+			})
 			return
 
 		case event, ok := <-eventCh:
@@ -190,21 +248,28 @@ func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, req Requ
 
 			switch {
 			case event.App.SyncStatus == "Synced" && event.App.Health == "Healthy":
+				// App is fully healthy — success.
 				return
 
 			case event.App.Health == "Degraded" && event.App.SyncStatus == "Synced" && !req.SkipUnhealthy:
-				// Sync completed but app is broken — fetch resource details and exit.
-				tree, treeErr := o.client.ResourceTree(ctx, name)
-				if treeErr != nil {
-					o.log.Warn("resource tree fetch failed",
-						zap.String("app", name), zap.Error(treeErr))
-				} else {
-					r.Resources = tree
+				// Sync completed but app is not yet healthy. Start the grace period
+				// timer on first observation. If the app recovers before the timer
+				// fires, the Synced+Healthy case above returns first.
+				if graceCh == nil {
+					graceTimer = time.NewTimer(req.DegradedGracePeriod)
+					graceCh = graceTimer.C
 				}
-				updateFn(r)
-				return
+				// Still within grace period — keep watching.
 
-				// If Degraded but still OutOfSync, keep waiting — sync hasn't finished.
+			default:
+				// App moved out of Synced+Degraded (e.g. Progressing during pod
+				// restart) — cancel the timer so it doesn't fire against a state
+				// that is no longer Degraded.
+				if graceTimer != nil {
+					graceTimer.Stop()
+					graceTimer = nil
+					graceCh = nil
+				}
 			}
 		}
 	}

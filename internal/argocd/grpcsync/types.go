@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	DefaultTimeout      = 5 * time.Minute
-	DefaultPollInterval = 5 * time.Second
+	DefaultTimeout             = 5 * time.Minute
+	DefaultPollInterval        = 5 * time.Second
+	DefaultDegradedGracePeriod = 60 * time.Second
 )
 
 // OperationType indicates what kind of sync operation to perform.
@@ -33,6 +34,9 @@ type Request struct {
 	Operation     OperationType
 	OnProgress    ProgressFn                      // optional, called on each state change
 	ReconcileFn   func(ctx context.Context) error // triggers AppSet reconciliation
+	// DegradedGracePeriod is how long SyncAndWait tolerates Synced+Degraded before
+	// reporting failure. Zero is replaced by DefaultDegradedGracePeriod.
+	DegradedGracePeriod time.Duration
 }
 
 // Result holds the observed state of a single application after a sync operation.
