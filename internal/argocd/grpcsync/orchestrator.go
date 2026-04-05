@@ -124,11 +124,17 @@ func (o *Orchestrator) watchApps(ctx context.Context, req Request, fn watchFn) (
 	}
 
 	// Sort tiers lexically: "0-operators" < "1-data" < "2-services".
+	// For disable, reverse the order so services come down before their dependencies.
 	tiers := make([]string, 0, len(tierApps))
 	for t := range tierApps {
 		tiers = append(tiers, t)
 	}
 	sort.Strings(tiers)
+	if req.Operation == OpDisable {
+		for i, j := 0, len(tiers)-1; i < j; i, j = i+1, j-1 {
+			tiers[i], tiers[j] = tiers[j], tiers[i]
+		}
+	}
 
 	results := make([]Result, len(req.Apps))
 	for i, name := range req.Apps {
