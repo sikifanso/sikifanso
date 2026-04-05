@@ -67,7 +67,12 @@ func Install(ctx context.Context, log *zap.Logger, restCfg *rest.Config, cluster
 	}
 	log.Info("cilium deployed successfully")
 
-	if err := waitForNodes(ctx, restCfg); err != nil {
+	cs, err := kubernetes.NewForConfig(restCfg)
+	if err != nil {
+		return nil, fmt.Errorf("creating kubernetes client: %w", err)
+	}
+
+	if err := waitForNodes(ctx, cs); err != nil {
 		return nil, fmt.Errorf("waiting for nodes: %w", err)
 	}
 	log.Info("all nodes are ready")
@@ -100,12 +105,7 @@ func detectAPIServerIP(ctx context.Context, clusterName string) (string, error) 
 
 // waitForNodes polls all Kubernetes nodes until every node reports
 // condition Ready=True, or the timeout expires. A spinner shows progress.
-func waitForNodes(ctx context.Context, restCfg *rest.Config) error {
-	cs, err := kubernetes.NewForConfig(restCfg)
-	if err != nil {
-		return fmt.Errorf("creating kubernetes client: %w", err)
-	}
-
+func waitForNodes(ctx context.Context, cs kubernetes.Interface) error {
 	s := spinner.New(spinner.CharSets[11], 120*time.Millisecond, spinner.WithWriter(os.Stderr))
 	s.Suffix = " Waiting for nodes to be ready..."
 	s.Start()
