@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -144,12 +145,12 @@ func syncAfterMutation(ctx context.Context, cmd *cli.Command, sess *session.Sess
 		if opts.Operation == grpcsync.OpDisable {
 			return fmt.Errorf("disable incomplete: Application deletion still in progress (resources may have long termination grace periods — try a longer --timeout)")
 		}
-		return fmt.Errorf("sync failed: one or more apps unhealthy")
+		return fmt.Errorf("sync failed: %s", summarizeUnhealthy(results))
 	case grpcsync.ExitTimeout:
 		if opts.Operation == grpcsync.OpDisable {
 			return fmt.Errorf("disable timed out: Application deletion still in progress (try --timeout 10m)")
 		}
-		return fmt.Errorf("sync timed out: apps may still be reconciling (try a longer --timeout)")
+		return fmt.Errorf("sync timed out: %s (try a longer --timeout)", summarizeUnhealthy(results))
 	}
 	return nil
 }
@@ -182,6 +183,30 @@ func printSyncResults(w io.Writer, results []grpcsync.Result) {
 			}
 		}
 	}
+}
+
+// summarizeUnhealthy builds a one-line summary of apps that are not Synced+Healthy,
+// including the first degraded resource message per app for actionable diagnostics.
+func summarizeUnhealthy(results []grpcsync.Result) string {
+	var parts []string
+	for _, r := range results {
+		if r.Deleted || (r.SyncStatus == "Synced" && r.Health == "Healthy") {
+			continue
+		}
+		detail := fmt.Sprintf("%s (sync=%s health=%s)", r.App, r.SyncStatus, r.Health)
+		// First unhealthy resource with a non-empty message — keeps the error line scannable.
+		for _, res := range r.Resources {
+			if res.Health != "" && res.Health != "Healthy" && res.Message != "" {
+				detail += fmt.Sprintf(" [%s/%s: %s]", res.Kind, res.Name, res.Message)
+				break
+			}
+		}
+		parts = append(parts, detail)
+	}
+	if len(parts) == 0 {
+		return "one or more apps unhealthy"
+	}
+	return strings.Join(parts, "; ")
 }
 
 // buildAppTiers returns a map of app name → tier for tier-aware sequencing.

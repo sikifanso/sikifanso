@@ -60,9 +60,9 @@ func appSyncCmd() *cli.Command {
 
 			switch exitCode {
 			case grpcsync.ExitFailure:
-				return fmt.Errorf("sync failed: one or more apps unhealthy")
+				return fmt.Errorf("sync failed: %s", summarizeUnhealthy(results))
 			case grpcsync.ExitTimeout:
-				return fmt.Errorf("sync timed out: apps still progressing")
+				return fmt.Errorf("sync timed out: %s (try a longer --timeout)", summarizeUnhealthy(results))
 			}
 			return nil
 		}),
