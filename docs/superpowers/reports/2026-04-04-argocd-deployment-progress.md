@@ -26,7 +26,7 @@
 | P14 | Medium | Default branch conflates Progressing and Unknown | Open | |
 | P15 | Medium | Spinner suffix data race under concurrent watches | Open | |
 | P16 | Medium | ReconcileFn error swallowed, causes full-timeout block | Open | |
-| P17 | Medium | Root ApplicationSets start concurrently — resource contention | Open | |
+| P17 | Medium | Root ApplicationSets start concurrently — resource contention | **Done** | PR #15 — phased bootstrap: infra AppSet → health gate → workload AppSets |
 | P18 | Medium | ResourceTree misses sync error messages | Open | |
 | P19 | Medium | gRPC connection has no keep-alive | Open | |
 | P20 | Medium | agent-full exceeds safe memory for 8-16 GiB hosts | Open | |
@@ -53,7 +53,7 @@
 | T9 | Medium | Replace pollOnce with retry loop | **Done** | P10 |
 | T10 | Medium | Tier-aware watchApps goroutine sequencing | **Done** | P6 — PR #13; tier-aware sequencing + reverse order for disable |
 | T11 | Medium | ArgoCD gRPC readiness probe after install | **Done** | P4 — WaitForGRPC polls Version endpoint; installInfra extracted from Create |
-| T12 | Medium | Startup ApplicationSet sequencing in cluster create | Open | P17 |
+| T12 | Medium | Startup ApplicationSet sequencing in cluster create | **Done** | P17 — PR #15; phased bootstrap with WaitForApplicationsHealthy |
 | T13 | Medium | Actionable error messages from Result slice | Open | P13 |
 | T14 | Medium | Fix spinner data race + multi-app progress | Open | P15 |
 | T15 | Medium | Temporal per-service resources + disable Elasticsearch | Open | P21 |
@@ -64,7 +64,7 @@
 
 ## Summary
 
-- **Completed**: 14/17 tasks (T1–T11 + associated review fixes)
+- **Completed**: 15/17 tasks (T1–T12 + associated review fixes)
 - **Remaining Critical**: 0
 - **Remaining High**: 0
 - **Remaining Medium**: 6 (T12–T17)
