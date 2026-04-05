@@ -22,9 +22,9 @@
 | P10 | Medium | pollOnce fallback gives single stale snapshot | **Done** | `fc64572` — pollUntilTerminal loop; `1417023`, `4fd8bf1` — review fixes |
 | P11 | Medium | waitForAppear always waits >=5s (no initial check) | Open | |
 | P12 | Medium | SyncApplication called without operation-state guard | Open | |
-| P13 | Medium | Error messages discard all context | Open | |
+| P13 | Medium | Error messages discard all context | **Done** | PR #16 — summarizeUnhealthy with per-app diagnostics |
 | P14 | Medium | Default branch conflates Progressing and Unknown | Open | |
-| P15 | Medium | Spinner suffix data race under concurrent watches | Open | |
+| P15 | Medium | Spinner suffix data race under concurrent watches | **Done** | progressTracker with mutex + spinner Lock/Unlock |
 | P16 | Medium | ReconcileFn error swallowed, causes full-timeout block | Open | |
 | P17 | Medium | Root ApplicationSets start concurrently — resource contention | **Done** | PR #15 — phased bootstrap: infra AppSet → health gate → workload AppSets |
 | P18 | Medium | ResourceTree misses sync error messages | Open | |
@@ -54,8 +54,8 @@
 | T10 | Medium | Tier-aware watchApps goroutine sequencing | **Done** | P6 — PR #13; tier-aware sequencing + reverse order for disable |
 | T11 | Medium | ArgoCD gRPC readiness probe after install | **Done** | P4 — WaitForGRPC polls Version endpoint; installInfra extracted from Create |
 | T12 | Medium | Startup ApplicationSet sequencing in cluster create | **Done** | P17 — PR #15; phased bootstrap with WaitForApplicationsHealthy |
-| T13 | Medium | Actionable error messages from Result slice | Open | P13 |
-| T14 | Medium | Fix spinner data race + multi-app progress | Open | P15 |
+| T13 | Medium | Actionable error messages from Result slice | **Done** | P13 — PR #16 |
+| T14 | Medium | Fix spinner data race + multi-app progress | **Done** | P15 — progressTracker with mutex + multi-app suffix |
 | T15 | Medium | Temporal per-service resources + disable Elasticsearch | Open | P21 |
 | T16 | Medium | Reduce Prometheus PVC + add retentionSize guard | Open | P22 |
 | T17 | Medium | Separate ResourceQuota requests/limits in agent-template | Open | P23 |
@@ -64,8 +64,8 @@
 
 ## Summary
 
-- **Completed**: 15/17 tasks (T1–T12 + associated review fixes)
+- **Completed**: 14/17 tasks (T1–T14 + associated review fixes)
 - **Remaining Critical**: 0
 - **Remaining High**: 0
-- **Remaining Medium**: 6 (T12–T17)
+- **Remaining Medium**: 3 (T15–T17)
 - **Low (no task)**: 2 (P24, P25)

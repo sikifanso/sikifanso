@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -103,6 +104,7 @@ func syncAfterMutation(ctx context.Context, cmd *cli.Command, sess *session.Sess
 
 	// 3. Build request with spinner for progress feedback.
 	s := spinner.New(spinner.CharSets[11], 120*time.Millisecond, spinner.WithWriter(os.Stderr))
+	progress := newProgressTracker(s, opts.Apps)
 
 	orch := grpcsync.NewOrchestrator(grpcClient, zapLogger)
 	req := grpcsync.Request{
@@ -114,13 +116,7 @@ func syncAfterMutation(ctx context.Context, cmd *cli.Command, sess *session.Sess
 		ReconcileFn: func(ctx context.Context) error {
 			return reconciler.Trigger(ctx, opts.AppSetName)
 		},
-		OnProgress: func(app, status, detail string) {
-			suffix := fmt.Sprintf(" %s  %s", app, status)
-			if detail != "" {
-				suffix += "  " + detail
-			}
-			s.Suffix = suffix
-		},
+		OnProgress: progress.Update,
 	}
 
 	// 4. No-wait mode.
@@ -207,6 +203,56 @@ func summarizeUnhealthy(results []grpcsync.Result) string {
 		return "one or more apps unhealthy"
 	}
 	return strings.Join(parts, "; ")
+}
+
+// progressTracker aggregates per-app status into a single spinner suffix so
+// that all apps remain visible during concurrent sync (without this, only the
+// last-writing goroutine's status would show).
+type progressTracker struct {
+	mu         sync.Mutex
+	spinner    *spinner.Spinner
+	apps       []string
+	status     map[string]string
+	lastSuffix string
+}
+
+func newProgressTracker(s *spinner.Spinner, apps []string) *progressTracker {
+	return &progressTracker{
+		spinner: s,
+		apps:    apps,
+		status:  make(map[string]string, len(apps)),
+	}
+}
+
+// Update records the latest status for an app and re-renders the combined suffix.
+func (p *progressTracker) Update(app, status, detail string) {
+	line := fmt.Sprintf("%s %s", app, status)
+	if detail != "" {
+		line += "  " + detail
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.status[app] = line
+
+	var sb strings.Builder
+	for _, name := range p.apps {
+		if s, ok := p.status[name]; ok {
+			if sb.Len() > 0 {
+				sb.WriteString("  │  ")
+			}
+			sb.WriteString(s)
+		}
+	}
+	suffix := " " + sb.String()
+	if suffix == p.lastSuffix {
+		return
+	}
+	p.lastSuffix = suffix
+	p.spinner.Lock()
+	p.spinner.Suffix = suffix
+	p.spinner.Unlock()
 }
 
 // buildAppTiers returns a map of app name → tier for tier-aware sequencing.
