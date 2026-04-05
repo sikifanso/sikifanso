@@ -1,7 +1,13 @@
 package main
 
 import (
+	"os"
+	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/briandowns/spinner"
 
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcsync"
@@ -81,5 +87,73 @@ func TestSummarizeUnhealthy(t *testing.T) {
 				t.Errorf("summarizeUnhealthy() =\n  %q\nwant:\n  %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestProgressTracker_SingleApp(t *testing.T) {
+	s := spinner.New(spinner.CharSets[11], 120*time.Millisecond, spinner.WithWriter(os.Stderr))
+	pt := newProgressTracker(s, []string{"langfuse"})
+
+	pt.Update("langfuse", "Synced/Healthy", "")
+
+	s.Lock()
+	got := s.Suffix
+	s.Unlock()
+
+	want := " langfuse Synced/Healthy"
+	if got != want {
+		t.Errorf("suffix = %q, want %q", got, want)
+	}
+}
+
+func TestProgressTracker_MultiApp_PreservesOrder(t *testing.T) {
+	s := spinner.New(spinner.CharSets[11], 120*time.Millisecond, spinner.WithWriter(os.Stderr))
+	apps := []string{"valkey", "langfuse", "presidio"}
+	pt := newProgressTracker(s, apps)
+
+	// Update in reverse order — suffix should still match the original app order.
+	pt.Update("presidio", "Synced/Healthy", "")
+	pt.Update("valkey", "OutOfSync/Progressing", "syncing")
+	pt.Update("langfuse", "Synced/Degraded", "CrashLoopBackOff")
+
+	s.Lock()
+	got := s.Suffix
+	s.Unlock()
+
+	want := " valkey OutOfSync/Progressing  syncing  │  langfuse Synced/Degraded  CrashLoopBackOff  │  presidio Synced/Healthy"
+	if got != want {
+		t.Errorf("suffix =\n  %q\nwant:\n  %q", got, want)
+	}
+}
+
+func TestProgressTracker_ConcurrentUpdates(t *testing.T) {
+	// This test is meaningful with -race; it verifies no data race on concurrent Update calls.
+	s := spinner.New(spinner.CharSets[11], 120*time.Millisecond, spinner.WithWriter(os.Stderr))
+	s.Start()
+	defer s.Stop()
+
+	apps := []string{"a", "b", "c", "d", "e"}
+	pt := newProgressTracker(s, apps)
+
+	var wg sync.WaitGroup
+	for _, app := range apps {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			for i := 0; i < 50; i++ {
+				pt.Update(name, "Progressing", "wave")
+			}
+		}(app)
+	}
+	wg.Wait()
+
+	// After all goroutines finish, suffix must contain all five apps.
+	s.Lock()
+	got := s.Suffix
+	s.Unlock()
+	for _, app := range apps {
+		if !strings.Contains(got, app) {
+			t.Errorf("suffix %q missing app %q", got, app)
+		}
 	}
 }
