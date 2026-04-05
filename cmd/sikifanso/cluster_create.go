@@ -125,11 +125,15 @@ func clusterCreateAction(ctx context.Context, cmd *cli.Command) error {
 				if recErr != nil {
 					zapLogger.Warn("post-profile sync: reconciler unavailable", zap.Error(recErr))
 				} else {
+					allApps := make([]string, 0, len(profileApps)+len(autoAdded))
+					allApps = append(allApps, profileApps...)
+					allApps = append(allApps, autoAdded...)
 					orch := grpcsync.NewOrchestrator(client, zapLogger)
 					results, exitCode := orch.SyncAndWait(ctx, grpcsync.Request{
-						Apps:      append(profileApps, autoAdded...),
+						Apps:      allApps,
 						Operation: grpcsync.OpEnable,
 						Prune:     true,
+						AppTiers:  buildAppTiers(sess.GitOpsPath, allApps),
 						ReconcileFn: func(ctx context.Context) error {
 							return reconciler.Trigger(ctx, "catalog")
 						},
