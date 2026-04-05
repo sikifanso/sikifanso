@@ -207,7 +207,7 @@ func TestSyncAndWait_StreamClose_PollsUntilHealthy(t *testing.T) {
 	t.Parallel()
 	fake := &fakeAppClient{
 		// Stream sends one Progressing event then closes early.
-		events:                 []grpcclient.WatchEvent{
+		events: []grpcclient.WatchEvent{
 			{App: grpcclient.AppStatus{Name: "myapp", SyncStatus: "Synced", Health: "Progressing"}},
 		},
 		closeStreamAfterEvents: true,
