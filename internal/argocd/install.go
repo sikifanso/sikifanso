@@ -168,6 +168,8 @@ func WaitForGRPC(ctx context.Context, log *zap.Logger, addr string) error {
 		if err := probeVersion(ctx, client); err == nil {
 			log.Info("ArgoCD gRPC server is ready")
 			return nil
+		} else {
+			log.Debug("ArgoCD gRPC probe failed, retrying", zap.Error(err))
 		}
 
 		select {
