@@ -85,7 +85,10 @@ func (f *fakeAppClient) WatchApplication(ctx context.Context, _ string) (<-chan 
 	return ch, nil
 }
 
-func (f *fakeAppClient) GetApplication(_ context.Context, _ string) (*grpcclient.AppDetail, error) {
+func (f *fakeAppClient) GetApplication(ctx context.Context, _ string) (*grpcclient.AppDetail, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if len(f.detailSeq) > 0 {
 		idx := int(f.detailIdx.Add(1) - 1)
 		if idx >= len(f.detailSeq) {

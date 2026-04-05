@@ -399,9 +399,9 @@ func (o *Orchestrator) pollUntilGone(ctx context.Context, name string, updateFn 
 //   - Degraded or Missing → failure
 //   - ctx cancelled → caller handles via ExitTimeout
 //
-// The first poll happens immediately on entry (before the ticker fires) so
-// stream-error fallback is responsive with no initial delay. Subsequent polls
-// wait for the ticker first so a cancelled context never triggers a wasted RPC.
+// The first poll happens immediately on entry (no initial delay when falling back
+// from a stream error). Subsequent polls wait for the ticker first, so a cancelled
+// context avoids a wasted RPC on each subsequent iteration.
 func (o *Orchestrator) pollUntilTerminal(ctx context.Context, name string, updateFn func(Result)) {
 	ticker := time.NewTicker(o.pollIntervalOrDefault())
 	defer ticker.Stop()
