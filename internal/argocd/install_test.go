@@ -75,22 +75,33 @@ func TestWaitForGRPC_DelayedStart(t *testing.T) {
 	ctx := context.Background()
 	log := zaptest.NewLogger(t)
 
-	// Start the server after a short delay.
+	// Start the server after a short delay. Use a channel to detect listen
+	// failures so we don't call t.Logf on a potentially finished test.
 	srv := grpc.NewServer()
 	versionpkg.RegisterVersionServiceServer(srv, &fakeVersionServer{})
+	listenErr := make(chan error, 1)
 
 	go func() {
 		time.Sleep(2 * time.Second)
 		lis2, err := net.Listen("tcp", addr)
 		if err != nil {
-			t.Logf("re-listen: %v", err)
+			listenErr <- err
 			return
 		}
+		listenErr <- nil
 		_ = srv.Serve(lis2)
 	}()
-	defer srv.GracefulStop()
+	t.Cleanup(srv.GracefulStop)
 
 	if err := WaitForGRPC(ctx, log, addr); err != nil {
+		// Check if the goroutine failed to re-listen before blaming WaitForGRPC.
+		select {
+		case lErr := <-listenErr:
+			if lErr != nil {
+				t.Skipf("port %s was reclaimed by OS: %v", addr, lErr)
+			}
+		default:
+		}
 		t.Fatalf("WaitForGRPC should succeed after delayed start: %v", err)
 	}
 }

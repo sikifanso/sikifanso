@@ -155,8 +155,17 @@ func WaitForGRPC(ctx context.Context, log *zap.Logger, addr string) error {
 
 	log.Info("waiting for ArgoCD gRPC server", zap.String("addr", addr))
 
+	c, err := apiclient.NewClient(&apiclient.ClientOptions{
+		ServerAddr: addr,
+		Insecure:   true,
+		PlainText:  true,
+	})
+	if err != nil {
+		return fmt.Errorf("creating ArgoCD probe client: %w", err)
+	}
+
 	for {
-		if err := probeGRPC(ctx, addr); err == nil {
+		if err := probeVersion(ctx, c); err == nil {
 			log.Info("ArgoCD gRPC server is ready")
 			return nil
 		}
@@ -169,19 +178,10 @@ func WaitForGRPC(ctx context.Context, log *zap.Logger, addr string) error {
 	}
 }
 
-// probeGRPC attempts a single unauthenticated Version call. Version is the
-// lightest ArgoCD gRPC endpoint and requires no auth token, making it safe
-// to call before credentials are used.
-func probeGRPC(ctx context.Context, addr string) error {
-	c, err := apiclient.NewClient(&apiclient.ClientOptions{
-		ServerAddr: addr,
-		Insecure:   true,
-		PlainText:  true,
-	})
-	if err != nil {
-		return err
-	}
-
+// probeVersion issues a single unauthenticated Version call on an existing
+// client. Version is the lightest ArgoCD gRPC endpoint and requires no auth
+// token, making it safe to call before credentials are used.
+func probeVersion(ctx context.Context, c apiclient.Client) error {
 	conn, versionClient, err := c.NewVersionClient()
 	if err != nil {
 		return err
