@@ -259,7 +259,7 @@ func installInfra(ctx context.Context, log *zap.Logger, restCfg *rest.Config, na
 	}
 
 	if err := argocd.WaitForApplicationsHealthy(ctx, log, restCfg, cfg.ArgoCD.Namespace,
-		[]string{cfg.Cilium.ReleaseName, cfg.ArgoCD.ReleaseName}); err != nil {
+		[]string{cfg.Cilium.ReleaseName, cfg.ArgoCD.ReleaseName}, "infrastructure"); err != nil {
 		return nil, fmt.Errorf("waiting for infrastructure applications: %w", err)
 	}
 

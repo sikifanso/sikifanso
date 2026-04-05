@@ -32,15 +32,6 @@ var workloadManifests = []string{
 	"bootstrap/root-agents.yaml",
 }
 
-// ApplyRootApp reads the bootstrap ApplicationSet manifests from the gitops
-// directory and applies them to the cluster via Server-Side Apply.
-func ApplyRootApp(ctx context.Context, log *zap.Logger, restCfg *rest.Config, gitopsDir string) error {
-	manifests := make([]string, 0, len(infraManifests)+len(workloadManifests))
-	manifests = append(manifests, infraManifests...)
-	manifests = append(manifests, workloadManifests...)
-	return applyManifests(ctx, log, restCfg, gitopsDir, manifests)
-}
-
 // ApplyInfraManifests applies only the infrastructure ApplicationSet
 // (root-app.yaml) that manages Cilium and ArgoCD.
 func ApplyInfraManifests(ctx context.Context, log *zap.Logger, restCfg *rest.Config, gitopsDir string) error {

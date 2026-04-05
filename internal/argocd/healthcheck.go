@@ -22,21 +22,22 @@ var (
 // WaitForApplicationsHealthy polls the named ArgoCD Applications until all
 // report Synced+Healthy, or the timeout expires. It uses the dynamic K8s
 // client to read Application CRD status directly — no ArgoCD gRPC dependency.
-func WaitForApplicationsHealthy(ctx context.Context, log *zap.Logger, restCfg *rest.Config, namespace string, names []string) error {
+// The label is used in spinner and log messages (e.g. "infrastructure").
+func WaitForApplicationsHealthy(ctx context.Context, log *zap.Logger, restCfg *rest.Config, namespace string, names []string, label string) error {
 	dc, err := dynamic.NewForConfig(restCfg)
 	if err != nil {
 		return fmt.Errorf("creating dynamic client: %w", err)
 	}
 
 	s := spinner.New(spinner.CharSets[11], 120*time.Millisecond, spinner.WithWriter(os.Stderr))
-	s.Suffix = " Waiting for infrastructure applications to be healthy..."
+	s.Suffix = fmt.Sprintf(" Waiting for %s applications to be healthy...", label)
 	s.Start()
 	defer s.Stop()
 
 	ctx, cancel := context.WithTimeout(ctx, appHealthTimeout)
 	defer cancel()
 
-	log.Info("waiting for applications to be healthy", zap.Strings("apps", names))
+	log.Info("waiting for applications to be healthy", zap.String("label", label), zap.Strings("apps", names))
 
 	for {
 		ready := 0
@@ -51,16 +52,19 @@ func WaitForApplicationsHealthy(ctx context.Context, log *zap.Logger, restCfg *r
 			}
 		}
 
-		s.Suffix = fmt.Sprintf(" Waiting for infrastructure applications (%d/%d healthy)...", ready, len(names))
+		s.Suffix = fmt.Sprintf(" Waiting for %s applications (%d/%d healthy)...", label, ready, len(names))
 
 		if ready == len(names) {
-			log.Info("all infrastructure applications are healthy")
+			log.Info("all applications are healthy", zap.String("label", label))
 			return nil
 		}
 
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("timed out waiting for applications to be healthy (%d/%d ready)", ready, len(names))
+			if ctx.Err() == context.DeadlineExceeded {
+				return fmt.Errorf("timed out waiting for %s applications to be healthy (%d/%d ready)", label, ready, len(names))
+			}
+			return fmt.Errorf("cancelled waiting for %s applications to be healthy (%d/%d ready)", label, ready, len(names))
 		case <-time.After(appHealthInterval):
 		}
 	}

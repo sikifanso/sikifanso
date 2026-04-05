@@ -134,7 +134,7 @@ func TestWaitForApplicationsHealthy_AlreadyHealthy(t *testing.T) {
 	restCfg := &rest.Config{Host: "http://" + ln.Addr().String()}
 	log := zaptest.NewLogger(t)
 
-	err = WaitForApplicationsHealthy(context.Background(), log, restCfg, "argocd", []string{"cilium", "argo-cd"})
+	err = WaitForApplicationsHealthy(context.Background(), log, restCfg, "argocd", []string{"cilium", "argo-cd"}, "infrastructure")
 	if err != nil {
 		t.Fatalf("expected success: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestWaitForApplicationsHealthy_Timeout(t *testing.T) {
 	restCfg := &rest.Config{Host: "http://" + ln.Addr().String()}
 	log := zaptest.NewLogger(t)
 
-	err = WaitForApplicationsHealthy(context.Background(), log, restCfg, "argocd", []string{"cilium"})
+	err = WaitForApplicationsHealthy(context.Background(), log, restCfg, "argocd", []string{"cilium"}, "infrastructure")
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}
