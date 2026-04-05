@@ -232,6 +232,8 @@ func (p *progressTracker) Update(app, status, detail string) {
 	}
 
 	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	p.status[app] = line
 
 	var sb strings.Builder
@@ -245,12 +247,9 @@ func (p *progressTracker) Update(app, status, detail string) {
 	}
 	suffix := " " + sb.String()
 	if suffix == p.lastSuffix {
-		p.mu.Unlock()
 		return
 	}
 	p.lastSuffix = suffix
-	p.mu.Unlock()
-
 	p.spinner.Lock()
 	p.spinner.Suffix = suffix
 	p.spinner.Unlock()
