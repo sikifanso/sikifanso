@@ -20,6 +20,7 @@ import (
 	conf "github.com/k3d-io/k3d/v5/pkg/config/v1alpha5"
 	k3drt "github.com/k3d-io/k3d/v5/pkg/runtimes"
 	k3d "github.com/k3d-io/k3d/v5/pkg/types"
+	"k8s.io/client-go/rest"
 )
 
 // Options configures cluster creation.
@@ -159,47 +160,9 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 		return nil, fmt.Errorf("building rest config: %w", err)
 	}
 
-	// Cilium values: base config + runtime overrides (node ports).
-	// k8sServiceHost is a placeholder here; cilium.Install detects the actual IP
-	// and it's already in the values passed to CreateApplications.
-	ciliumValues := infraconfig.MergeValues(cfg.CiliumValues, infraconfig.CiliumRuntimeOverrides(np, ""))
-
-	ciliumResult, err := cilium.Install(ctx, log, restCfg, name, cfg.Cilium, ciliumValues)
+	argocdResult, err := installInfra(ctx, log, restCfg, name, hp, cfg, gitopsDir)
 	if err != nil {
-		return nil, fmt.Errorf("installing cilium: %w", err)
-	}
-
-	// Update cilium values with the actual API server IP for the ArgoCD Application CRD.
-	ciliumValues = infraconfig.MergeValues(cfg.CiliumValues, infraconfig.CiliumRuntimeOverrides(np, ciliumResult.APIServerIP))
-
-	// ArgoCD values: base config + runtime overrides (node port).
-	argocdValues := infraconfig.MergeValues(cfg.ArgoCDValues, infraconfig.ArgoCDRuntimeOverrides(np))
-
-	argocdResult, err := argocd.Install(ctx, log, restCfg, cfg.ArgoCD, argocdValues)
-	if err != nil {
-		return nil, fmt.Errorf("installing argocd: %w", err)
-	}
-
-	if err := argocd.CreateApplications(ctx, log, restCfg, cfg.ArgoCD.Namespace,
-		argocd.AppParams{
-			Name: cfg.Cilium.ReleaseName, Namespace: cfg.Cilium.Namespace,
-			RepoURL: cfg.Cilium.RepoURL, ChartName: cfg.Cilium.Chart,
-			ChartVersion: ciliumResult.ChartVersion,
-			Values:       ciliumValues,
-		},
-		argocd.AppParams{
-			Name: cfg.ArgoCD.ReleaseName, Namespace: cfg.ArgoCD.Namespace,
-			RepoURL: cfg.ArgoCD.RepoURL, ChartName: cfg.ArgoCD.Chart,
-			ChartVersion: argocdResult.ChartVersion,
-			Values:       argocdValues,
-		},
-	); err != nil {
-		return nil, fmt.Errorf("creating argocd applications: %w", err)
-	}
-
-	// Apply root application from the scaffolded gitops repo.
-	if err := gitops.ApplyRootApp(ctx, log, restCfg, gitopsDir); err != nil {
-		return nil, fmt.Errorf("applying root application: %w", err)
+		return nil, err
 	}
 
 	// Build and save session.
@@ -235,6 +198,63 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 
 	log.Info("k3d cluster created successfully", zap.String("cluster", name))
 	return sess, nil
+}
+
+// installInfra installs Cilium + ArgoCD, waits for gRPC readiness, creates
+// the initial Application CRDs, and applies the root ApplicationSet.
+func installInfra(ctx context.Context, log *zap.Logger, restCfg *rest.Config, name string, hp HostPorts, cfg *infraconfig.InfraConfig, gitopsDir string) (*argocd.InstallResult, error) {
+	np := cfg.Platform.NodePorts
+
+	// Cilium values: base config + runtime overrides (node ports).
+	ciliumValues := infraconfig.MergeValues(cfg.CiliumValues, infraconfig.CiliumRuntimeOverrides(np, ""))
+
+	ciliumResult, err := cilium.Install(ctx, log, restCfg, name, cfg.Cilium, ciliumValues)
+	if err != nil {
+		return nil, fmt.Errorf("installing cilium: %w", err)
+	}
+
+	// Update cilium values with the actual API server IP for the ArgoCD Application CRD.
+	ciliumValues = infraconfig.MergeValues(cfg.CiliumValues, infraconfig.CiliumRuntimeOverrides(np, ciliumResult.APIServerIP))
+
+	// ArgoCD values: base config + runtime overrides (node port).
+	argocdValues := infraconfig.MergeValues(cfg.ArgoCDValues, infraconfig.ArgoCDRuntimeOverrides(np))
+
+	argocdResult, err := argocd.Install(ctx, log, restCfg, cfg.ArgoCD, argocdValues)
+	if err != nil {
+		return nil, fmt.Errorf("installing argocd: %w", err)
+	}
+
+	// Wait for ArgoCD gRPC to be fully ready before creating Application CRDs.
+	// Deployment readiness probes pass before the gRPC listener and admission
+	// webhook are initialised, causing intermittent CreateApplications failures.
+	grpcAddr := fmt.Sprintf("localhost:%d", hp.ArgoCDGRPC)
+	if err := argocd.WaitForGRPC(ctx, log, grpcAddr); err != nil {
+		return nil, fmt.Errorf("waiting for argocd gRPC: %w", err)
+	}
+
+	if err := argocd.CreateApplications(ctx, log, restCfg, cfg.ArgoCD.Namespace,
+		argocd.AppParams{
+			Name: cfg.Cilium.ReleaseName, Namespace: cfg.Cilium.Namespace,
+			RepoURL: cfg.Cilium.RepoURL, ChartName: cfg.Cilium.Chart,
+			ChartVersion: ciliumResult.ChartVersion,
+			Values:       ciliumValues,
+		},
+		argocd.AppParams{
+			Name: cfg.ArgoCD.ReleaseName, Namespace: cfg.ArgoCD.Namespace,
+			RepoURL: cfg.ArgoCD.RepoURL, ChartName: cfg.ArgoCD.Chart,
+			ChartVersion: argocdResult.ChartVersion,
+			Values:       argocdValues,
+		},
+	); err != nil {
+		return nil, fmt.Errorf("creating argocd applications: %w", err)
+	}
+
+	// Apply root application from the scaffolded gitops repo.
+	if err := gitops.ApplyRootApp(ctx, log, restCfg, gitopsDir); err != nil {
+		return nil, fmt.Errorf("applying root application: %w", err)
+	}
+
+	return argocdResult, nil
 }
 
 // Delete deletes the k3d cluster with the given name and removes its kubeconfig entry.

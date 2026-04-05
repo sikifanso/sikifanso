@@ -8,8 +8,10 @@ import (
 
 	"github.com/alicanalbayrak/sikifanso/internal/helm"
 	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
+	"github.com/argoproj/argo-cd/v2/pkg/apiclient"
 	"github.com/briandowns/spinner"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/emptypb"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -136,6 +138,60 @@ func deploymentAvailable(dep *appsv1.Deployment) bool {
 		}
 	}
 	return false
+}
+
+var (
+	grpcReadyTimeout  = 30 * time.Second
+	grpcRetryInterval = 2 * time.Second
+)
+
+// WaitForGRPC polls the ArgoCD Version endpoint until the gRPC server
+// responds. Deployment readiness alone does not guarantee that the gRPC
+// listener (and admission webhook) are fully initialised — this probe
+// closes the gap between pod readiness and application-level readiness.
+func WaitForGRPC(ctx context.Context, log *zap.Logger, addr string) error {
+	ctx, cancel := context.WithTimeout(ctx, grpcReadyTimeout)
+	defer cancel()
+
+	log.Info("waiting for ArgoCD gRPC server", zap.String("addr", addr))
+
+	client, err := apiclient.NewClient(&apiclient.ClientOptions{
+		ServerAddr: addr,
+		Insecure:   true,
+		PlainText:  true,
+	})
+	if err != nil {
+		return fmt.Errorf("creating ArgoCD probe client: %w", err)
+	}
+
+	for {
+		if err := probeVersion(ctx, client); err == nil {
+			log.Info("ArgoCD gRPC server is ready")
+			return nil
+		} else {
+			log.Debug("ArgoCD gRPC probe failed, retrying", zap.Error(err))
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for ArgoCD gRPC at %s", addr)
+		case <-time.After(grpcRetryInterval):
+		}
+	}
+}
+
+// probeVersion issues a single unauthenticated Version call on an existing
+// client. Version is the lightest ArgoCD gRPC endpoint and requires no auth
+// token, making it safe to call before credentials are used.
+func probeVersion(ctx context.Context, c apiclient.Client) error {
+	conn, versionClient, err := c.NewVersionClient()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	_, err = versionClient.Version(ctx, &emptypb.Empty{})
+	return err
 }
 
 // extractAdminPassword reads the initial admin password from the
