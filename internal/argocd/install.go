@@ -67,19 +67,19 @@ func Install(ctx context.Context, log *zap.Logger, restCfg *rest.Config, chart i
 	}
 	log.Info("argocd helm release deployed")
 
-	cs, err := kubernetes.NewForConfig(restCfg)
+	kubeClient, err := kubernetes.NewForConfig(restCfg)
 	if err != nil {
 		return nil, fmt.Errorf("creating kubernetes client: %w", err)
 	}
 
-	if err := waitForDeployments(ctx, cs, chart.Namespace); err != nil {
+	if err := waitForDeployments(ctx, kubeClient, chart.Namespace); err != nil {
 		return nil, fmt.Errorf("waiting for argocd deployments: %w", err)
 	}
 	log.Info("argocd deployments are ready")
 
 	result := &InstallResult{ChartVersion: ch.Metadata.Version}
 
-	password, err := extractAdminPassword(ctx, cs, chart.Namespace)
+	password, err := extractAdminPassword(ctx, kubeClient, chart.Namespace)
 	if err != nil {
 		log.Warn("could not extract admin password", zap.Error(err))
 	} else {
@@ -92,7 +92,7 @@ func Install(ctx context.Context, log *zap.Logger, restCfg *rest.Config, chart i
 
 // waitForDeployments polls the key ArgoCD deployments until they all
 // report the Available condition, or the timeout expires.
-func waitForDeployments(ctx context.Context, cs kubernetes.Interface, namespace string) error {
+func waitForDeployments(ctx context.Context, kubeClient kubernetes.Interface, namespace string) error {
 	s := spinner.New(spinner.CharSets[11], 120*time.Millisecond, spinner.WithWriter(os.Stderr))
 	s.Suffix = " Waiting for ArgoCD deployments to be ready..."
 	s.Start()
@@ -104,7 +104,7 @@ func waitForDeployments(ctx context.Context, cs kubernetes.Interface, namespace 
 	for {
 		ready := 0
 		for _, name := range deploymentNames {
-			dep, err := cs.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+			dep, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 			if err != nil {
 				continue
 			}
@@ -141,8 +141,8 @@ func deploymentAvailable(dep *appsv1.Deployment) bool {
 // extractAdminPassword reads the initial admin password from the
 // argocd-initial-admin-secret Secret. client-go returns already-decoded
 // bytes from secret.Data, so no base64 decoding is needed.
-func extractAdminPassword(ctx context.Context, cs kubernetes.Interface, namespace string) (string, error) {
-	secret, err := cs.CoreV1().Secrets(namespace).Get(ctx, "argocd-initial-admin-secret", metav1.GetOptions{})
+func extractAdminPassword(ctx context.Context, kubeClient kubernetes.Interface, namespace string) (string, error) {
+	secret, err := kubeClient.CoreV1().Secrets(namespace).Get(ctx, "argocd-initial-admin-secret", metav1.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("getting argocd-initial-admin-secret: %w", err)
 	}
