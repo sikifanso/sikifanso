@@ -3,6 +3,7 @@ package grpcsync
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -45,13 +46,26 @@ func TestDegradedGracePeriodDefault(t *testing.T) {
 
 // fakeAppClient is a test double for appClient.
 // events are sent to the watch channel in order, then the goroutine blocks
-// until ctx is cancelled (simulating a long-lived, quiet watch stream).
+// until ctx is cancelled (simulating a long-lived, quiet watch stream) unless
+// closeStreamAfterEvents is true, in which case the channel is closed after all
+// events are sent (simulating a stream that terminates early).
+//
+// If watchErr is set, WatchApplication returns that error immediately.
+// If detailSeq is set, GetApplication returns elements in order (repeating the
+// last one once the slice is exhausted); otherwise it returns detail.
 type fakeAppClient struct {
-	events []grpcclient.WatchEvent
-	detail *grpcclient.AppDetail
+	events                 []grpcclient.WatchEvent
+	detail                 *grpcclient.AppDetail
+	detailSeq              []*grpcclient.AppDetail
+	detailIdx              atomic.Int64
+	watchErr               error
+	closeStreamAfterEvents bool
 }
 
 func (f *fakeAppClient) WatchApplication(ctx context.Context, _ string) (<-chan grpcclient.WatchEvent, error) {
+	if f.watchErr != nil {
+		return nil, f.watchErr
+	}
 	ch := make(chan grpcclient.WatchEvent, 16)
 	go func() {
 		defer close(ch)
@@ -62,13 +76,24 @@ func (f *fakeAppClient) WatchApplication(ctx context.Context, _ string) (<-chan 
 				return
 			}
 		}
-		// Block until ctx is cancelled — simulates a live stream with no more events.
-		<-ctx.Done()
+		if !f.closeStreamAfterEvents {
+			// Block until ctx is cancelled — simulates a live stream with no more events.
+			<-ctx.Done()
+		}
+		// else: let defer close(ch) run — simulates a stream that closes early.
 	}()
 	return ch, nil
 }
 
 func (f *fakeAppClient) GetApplication(_ context.Context, _ string) (*grpcclient.AppDetail, error) {
+	if len(f.detailSeq) > 0 {
+		idx := int(f.detailIdx.Add(1) - 1)
+		if idx >= len(f.detailSeq) {
+			idx = len(f.detailSeq) - 1
+		}
+		d := *f.detailSeq[idx]
+		return &d, nil
+	}
 	if f.detail == nil {
 		return nil, errors.New("not found")
 	}
@@ -137,6 +162,62 @@ func TestSyncAndWait_DegradedThenProgressing(t *testing.T) {
 		Apps:                []string{"myapp"},
 		Timeout:             10 * time.Second,
 		DegradedGracePeriod: 50 * time.Millisecond, // very short to catch any timer leak
+	})
+	if code != ExitSuccess {
+		t.Fatalf("exit code = %v (%d), want ExitSuccess; results = %+v", code, code, results)
+	}
+	if results[0].Health != "Healthy" {
+		t.Errorf("results[0].Health = %q, want Healthy", results[0].Health)
+	}
+}
+
+// TestSyncAndWait_StreamError_PollsUntilHealthy confirms that when WatchApplication
+// fails (transient gRPC error), SyncAndWait falls back to pollUntilTerminal and
+// waits for Synced+Healthy rather than snapshotting the first intermediate state.
+func TestSyncAndWait_StreamError_PollsUntilHealthy(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAppClient{
+		watchErr: errors.New("stream unavailable"),
+		detailSeq: []*grpcclient.AppDetail{
+			{AppStatus: grpcclient.AppStatus{Name: "myapp", SyncStatus: "Synced", Health: "Progressing"}},
+			{AppStatus: grpcclient.AppStatus{Name: "myapp", SyncStatus: "Synced", Health: "Progressing"}},
+			{AppStatus: grpcclient.AppStatus{Name: "myapp", SyncStatus: "Synced", Health: "Healthy"}},
+		},
+	}
+	orch := &Orchestrator{client: fake, log: zap.NewNop(), pollInterval: time.Millisecond}
+	results, code := orch.SyncAndWait(context.Background(), Request{
+		Apps:    []string{"myapp"},
+		Timeout: 10 * time.Second,
+	})
+	if code != ExitSuccess {
+		t.Fatalf("exit code = %v (%d), want ExitSuccess; results = %+v", code, code, results)
+	}
+	if results[0].Health != "Healthy" {
+		t.Errorf("results[0].Health = %q, want Healthy", results[0].Health)
+	}
+}
+
+// TestSyncAndWait_StreamClose_PollsUntilHealthy confirms that when the Watch
+// stream closes early (before the app is done), SyncAndWait continues polling
+// rather than capturing the intermediate state and exiting.
+func TestSyncAndWait_StreamClose_PollsUntilHealthy(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAppClient{
+		// Stream sends one Progressing event then closes early.
+		events:                 []grpcclient.WatchEvent{
+			{App: grpcclient.AppStatus{Name: "myapp", SyncStatus: "Synced", Health: "Progressing"}},
+		},
+		closeStreamAfterEvents: true,
+		// Poll sequence: still Progressing on first poll, then Healthy.
+		detailSeq: []*grpcclient.AppDetail{
+			{AppStatus: grpcclient.AppStatus{Name: "myapp", SyncStatus: "Synced", Health: "Progressing"}},
+			{AppStatus: grpcclient.AppStatus{Name: "myapp", SyncStatus: "Synced", Health: "Healthy"}},
+		},
+	}
+	orch := &Orchestrator{client: fake, log: zap.NewNop(), pollInterval: time.Millisecond}
+	results, code := orch.SyncAndWait(context.Background(), Request{
+		Apps:    []string{"myapp"},
+		Timeout: 10 * time.Second,
 	})
 	if code != ExitSuccess {
 		t.Fatalf("exit code = %v (%d), want ExitSuccess; results = %+v", code, code, results)
