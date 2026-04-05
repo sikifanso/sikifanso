@@ -13,7 +13,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/rest"
 )
 
 // InstallResult holds metadata from a successful ArgoCD install.
@@ -39,7 +39,7 @@ var deploymentNames = []string{
 // Chart coordinates and pre-merged values are provided by the caller
 // via the InfraConfig. It returns an InstallResult with chart version
 // and admin password.
-func Install(ctx context.Context, log *zap.Logger, chart infraconfig.ChartConfig, vals map[string]interface{}) (*InstallResult, error) {
+func Install(ctx context.Context, log *zap.Logger, restCfg *rest.Config, chart infraconfig.ChartConfig, vals map[string]interface{}) (*InstallResult, error) {
 	params := helm.InstallParams{
 		Namespace:     chart.Namespace,
 		RepoURL:       chart.RepoURL,
@@ -67,14 +67,19 @@ func Install(ctx context.Context, log *zap.Logger, chart infraconfig.ChartConfig
 	}
 	log.Info("argocd helm release deployed")
 
-	if err := waitForDeployments(ctx, chart.Namespace); err != nil {
+	cs, err := kubernetes.NewForConfig(restCfg)
+	if err != nil {
+		return nil, fmt.Errorf("creating kubernetes client: %w", err)
+	}
+
+	if err := waitForDeployments(ctx, cs, chart.Namespace); err != nil {
 		return nil, fmt.Errorf("waiting for argocd deployments: %w", err)
 	}
 	log.Info("argocd deployments are ready")
 
 	result := &InstallResult{ChartVersion: ch.Metadata.Version}
 
-	password, err := extractAdminPassword(ctx, chart.Namespace)
+	password, err := extractAdminPassword(ctx, cs, chart.Namespace)
 	if err != nil {
 		log.Warn("could not extract admin password", zap.Error(err))
 	} else {
@@ -87,17 +92,7 @@ func Install(ctx context.Context, log *zap.Logger, chart infraconfig.ChartConfig
 
 // waitForDeployments polls the key ArgoCD deployments until they all
 // report the Available condition, or the timeout expires.
-func waitForDeployments(ctx context.Context, namespace string) error {
-	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
-	if err != nil {
-		return fmt.Errorf("building kubeconfig: %w", err)
-	}
-
-	cs, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return fmt.Errorf("creating kubernetes client: %w", err)
-	}
-
+func waitForDeployments(ctx context.Context, cs kubernetes.Interface, namespace string) error {
 	s := spinner.New(spinner.CharSets[11], 120*time.Millisecond, spinner.WithWriter(os.Stderr))
 	s.Suffix = " Waiting for ArgoCD deployments to be ready..."
 	s.Start()
@@ -146,17 +141,7 @@ func deploymentAvailable(dep *appsv1.Deployment) bool {
 // extractAdminPassword reads the initial admin password from the
 // argocd-initial-admin-secret Secret. client-go returns already-decoded
 // bytes from secret.Data, so no base64 decoding is needed.
-func extractAdminPassword(ctx context.Context, namespace string) (string, error) {
-	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
-	if err != nil {
-		return "", fmt.Errorf("building kubeconfig: %w", err)
-	}
-
-	cs, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return "", fmt.Errorf("creating kubernetes client: %w", err)
-	}
-
+func extractAdminPassword(ctx context.Context, cs kubernetes.Interface, namespace string) (string, error) {
 	secret, err := cs.CoreV1().Secrets(namespace).Get(ctx, "argocd-initial-admin-secret", metav1.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("getting argocd-initial-admin-secret: %w", err)

@@ -12,6 +12,7 @@ import (
 	"github.com/alicanalbayrak/sikifanso/internal/cilium"
 	"github.com/alicanalbayrak/sikifanso/internal/gitops"
 	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
+	"github.com/alicanalbayrak/sikifanso/internal/kube"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
 	k3dclient "github.com/k3d-io/k3d/v5/pkg/client"
 	k3dconfig "github.com/k3d-io/k3d/v5/pkg/config"
@@ -153,12 +154,17 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 		return nil, fmt.Errorf("writing kubeconfig: %w", err)
 	}
 
+	restCfg, err := kube.RESTConfigForCluster(name)
+	if err != nil {
+		return nil, fmt.Errorf("building rest config: %w", err)
+	}
+
 	// Cilium values: base config + runtime overrides (node ports).
 	// k8sServiceHost is a placeholder here; cilium.Install detects the actual IP
 	// and it's already in the values passed to CreateApplications.
 	ciliumValues := infraconfig.MergeValues(cfg.CiliumValues, infraconfig.CiliumRuntimeOverrides(np, ""))
 
-	ciliumResult, err := cilium.Install(ctx, log, name, cfg.Cilium, ciliumValues)
+	ciliumResult, err := cilium.Install(ctx, log, restCfg, name, cfg.Cilium, ciliumValues)
 	if err != nil {
 		return nil, fmt.Errorf("installing cilium: %w", err)
 	}
@@ -169,12 +175,12 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 	// ArgoCD values: base config + runtime overrides (node port).
 	argocdValues := infraconfig.MergeValues(cfg.ArgoCDValues, infraconfig.ArgoCDRuntimeOverrides(np))
 
-	argocdResult, err := argocd.Install(ctx, log, cfg.ArgoCD, argocdValues)
+	argocdResult, err := argocd.Install(ctx, log, restCfg, cfg.ArgoCD, argocdValues)
 	if err != nil {
 		return nil, fmt.Errorf("installing argocd: %w", err)
 	}
 
-	if err := argocd.CreateApplications(ctx, log, cfg.ArgoCD.Namespace,
+	if err := argocd.CreateApplications(ctx, log, restCfg, cfg.ArgoCD.Namespace,
 		argocd.AppParams{
 			Name: cfg.Cilium.ReleaseName, Namespace: cfg.Cilium.Namespace,
 			RepoURL: cfg.Cilium.RepoURL, ChartName: cfg.Cilium.Chart,
@@ -192,7 +198,7 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 	}
 
 	// Apply root application from the scaffolded gitops repo.
-	if err := gitops.ApplyRootApp(ctx, log, gitopsDir); err != nil {
+	if err := gitops.ApplyRootApp(ctx, log, restCfg, gitopsDir); err != nil {
 		return nil, fmt.Errorf("applying root application: %w", err)
 	}
 
