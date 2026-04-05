@@ -155,7 +155,7 @@ func WaitForGRPC(ctx context.Context, log *zap.Logger, addr string) error {
 
 	log.Info("waiting for ArgoCD gRPC server", zap.String("addr", addr))
 
-	c, err := apiclient.NewClient(&apiclient.ClientOptions{
+	client, err := apiclient.NewClient(&apiclient.ClientOptions{
 		ServerAddr: addr,
 		Insecure:   true,
 		PlainText:  true,
@@ -165,7 +165,7 @@ func WaitForGRPC(ctx context.Context, log *zap.Logger, addr string) error {
 	}
 
 	for {
-		if err := probeVersion(ctx, c); err == nil {
+		if err := probeVersion(ctx, client); err == nil {
 			log.Info("ArgoCD gRPC server is ready")
 			return nil
 		}
