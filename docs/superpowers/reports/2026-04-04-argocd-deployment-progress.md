@@ -13,7 +13,7 @@
 | P1 | Critical | watchSingleApp exits on transient Degraded | **Done** | `6f30eb2` — Degraded grace period |
 | P2 | Critical | Cluster create post-profile sync uses wrong op | **Done** | `bfe0804` — use OpEnable; `46bc029` — include auto-added deps |
 | P3 | Critical | Catalog ApplicationSet has no automated SyncPolicy | **Done** | Part of `62cf234` — selfHeal + prune added to root-catalog.yaml |
-| P4 | High | ArgoCD webhook/gRPC not ready after install | Open | |
+| P4 | High | ArgoCD webhook/gRPC not ready after install | **Done** | gRPC Version probe between waitForDeployments and CreateApplications |
 | P5 | High | Hardcoded ~/.kube/config in Install/CreateApplications | **Done** | Thread *rest.Config via kube.RESTConfigForCluster |
 | P6 | High | RollingSync tier ordering ignored by CLI + missing tiers | **Done** | `62cf234` — RollingSync + dependency graph |
 | P7 | High | agent-minimal missing valkey | **Done** | `43edb58` — add valkey to agent-minimal |
@@ -51,8 +51,8 @@
 | T7 | High | Add valkey to agent-minimal + langfuse dependsOn | **Done** | P7 |
 | T8 | High | Fix presidio analyzer memory limit | **Done** | P9 — PR #25 |
 | T9 | Medium | Replace pollOnce with retry loop | **Done** | P10 |
-| T10 | Medium | Tier-aware watchApps goroutine sequencing | Open | P6 |
-| T11 | Medium | ArgoCD gRPC readiness probe after install | Open | P4 |
+| T10 | Medium | Tier-aware watchApps goroutine sequencing | **Done** | P6 — PR #13; tier-aware sequencing + reverse order for disable |
+| T11 | Medium | ArgoCD gRPC readiness probe after install | **Done** | P4 — WaitForGRPC polls Version endpoint; installInfra extracted from Create |
 | T12 | Medium | Startup ApplicationSet sequencing in cluster create | Open | P17 |
 | T13 | Medium | Actionable error messages from Result slice | Open | P13 |
 | T14 | Medium | Fix spinner data race + multi-app progress | Open | P15 |
@@ -64,8 +64,8 @@
 
 ## Summary
 
-- **Completed**: 12/17 tasks (T1–T9 + associated review fixes)
+- **Completed**: 14/17 tasks (T1–T11 + associated review fixes)
 - **Remaining Critical**: 0
 - **Remaining High**: 0
-- **Remaining Medium**: 8 (T10–T17)
+- **Remaining Medium**: 6 (T12–T17)
 - **Low (no task)**: 2 (P24, P25)
