@@ -22,8 +22,16 @@ type appClient interface {
 // Orchestrator manages sync-and-watch operations for one or more ArgoCD applications
 // using the gRPC Watch stream for real-time feedback.
 type Orchestrator struct {
-	client appClient
-	log    *zap.Logger
+	client       appClient
+	log          *zap.Logger
+	pollInterval time.Duration // zero → DefaultPollInterval; set in tests for speed
+}
+
+func (o *Orchestrator) pollIntervalOrDefault() time.Duration {
+	if o.pollInterval > 0 {
+		return o.pollInterval
+	}
+	return DefaultPollInterval
 }
 
 // NewOrchestrator creates an Orchestrator backed by the given gRPC client.
@@ -166,12 +174,12 @@ func (o *Orchestrator) watchApps(ctx context.Context, req Request, fn watchFn) (
 //   - Deleted → deleted
 //   - ctx cancelled → caller handles via ExitTimeout
 //
-// On stream error the function falls back to a single pollOnce call.
+// On stream error the function falls back to pollUntilTerminal.
 func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, req Request, updateFn func(Result)) {
 	eventCh, err := o.client.WatchApplication(ctx, name)
 	if err != nil {
 		o.log.Warn("watch failed, falling back to poll", zap.String("app", name), zap.Error(err))
-		o.pollOnce(ctx, name, updateFn)
+		o.pollUntilTerminal(ctx, name, updateFn)
 		return
 	}
 
@@ -224,7 +232,7 @@ func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, req Requ
 
 		case event, ok := <-eventCh:
 			if !ok {
-				o.pollOnce(ctx, name, updateFn)
+				o.pollUntilTerminal(ctx, name, updateFn)
 				return
 			}
 
@@ -277,7 +285,7 @@ func (o *Orchestrator) watchSingleApp(ctx context.Context, name string, req Requ
 
 // waitForAppear polls for the app to exist, then watches for Synced+Healthy.
 func (o *Orchestrator) waitForAppear(ctx context.Context, name string, req Request, updateFn func(Result)) {
-	ticker := time.NewTicker(DefaultPollInterval)
+	ticker := time.NewTicker(o.pollIntervalOrDefault())
 	defer ticker.Stop()
 
 	// Poll until the app exists.
@@ -361,7 +369,7 @@ func (o *Orchestrator) waitForDisappear(ctx context.Context, name string, _ Requ
 
 // pollUntilGone polls GetApplication until the app is not found.
 func (o *Orchestrator) pollUntilGone(ctx context.Context, name string, updateFn func(Result)) {
-	ticker := time.NewTicker(DefaultPollInterval)
+	ticker := time.NewTicker(o.pollIntervalOrDefault())
 	defer ticker.Stop()
 
 	for {
@@ -382,20 +390,50 @@ func (o *Orchestrator) pollUntilGone(ctx context.Context, name string, updateFn 
 	}
 }
 
-// pollOnce performs a single GetApplication call and passes the result to updateFn.
-func (o *Orchestrator) pollOnce(ctx context.Context, name string, updateFn func(Result)) {
-	detail, err := o.client.GetApplication(ctx, name)
-	if err != nil {
-		o.log.Warn("poll failed", zap.String("app", name), zap.Error(err))
-		updateFn(Result{App: name})
-		return
+// pollUntilTerminal polls GetApplication in a loop until the app reaches a
+// terminal state or ctx is cancelled. Used as fallback when the Watch stream
+// fails or closes before the app is done.
+//
+// Terminal states:
+//   - Synced+Healthy → success
+//   - Degraded or Missing → failure
+//   - ctx cancelled → caller handles via ExitTimeout
+//
+// The first poll happens immediately on entry (before the ticker fires) so
+// stream-error fallback is responsive with no initial delay. Subsequent polls
+// wait for the ticker first so a cancelled context never triggers a wasted RPC.
+func (o *Orchestrator) pollUntilTerminal(ctx context.Context, name string, updateFn func(Result)) {
+	ticker := time.NewTicker(o.pollIntervalOrDefault())
+	defer ticker.Stop()
+
+	poll := func() (terminal bool) {
+		detail, err := o.client.GetApplication(ctx, name)
+		if err != nil {
+			o.log.Warn("poll failed", zap.String("app", name), zap.Error(err))
+			return false
+		}
+		updateFn(Result{
+			App:        name,
+			SyncStatus: detail.SyncStatus,
+			Health:     detail.Health,
+			Message:    detail.Message,
+			Resources:  detail.Resources,
+		})
+		return (detail.SyncStatus == "Synced" && detail.Health == "Healthy") ||
+			detail.Health == "Degraded" || detail.Health == "Missing"
 	}
 
-	updateFn(Result{
-		App:        name,
-		SyncStatus: detail.SyncStatus,
-		Health:     detail.Health,
-		Message:    detail.Message,
-		Resources:  detail.Resources,
-	})
+	if poll() {
+		return
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		if poll() {
+			return
+		}
+	}
 }
