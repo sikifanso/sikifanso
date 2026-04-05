@@ -2,6 +2,7 @@ package grpcsync
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -97,9 +98,82 @@ func (o *Orchestrator) SyncOnly(ctx context.Context, req Request) error {
 // watchFn is the per-app strategy used by watchApps.
 type watchFn func(ctx context.Context, name string, req Request, updateFn func(Result))
 
-// watchApps watches all apps concurrently using the given per-app strategy and
-// returns their results plus a composite ExitCode once all goroutines have finished.
+// watchApps watches apps using the given per-app strategy. When req.AppTiers
+// is non-nil, apps are grouped by tier and each tier batch runs sequentially
+// (tier-0 first, then tier-1, etc.). If any tier produces ExitFailure, remaining
+// tiers are skipped. When AppTiers is nil, all apps run concurrently.
 func (o *Orchestrator) watchApps(ctx context.Context, req Request, fn watchFn) ([]Result, ExitCode) {
+	if req.AppTiers == nil {
+		return o.watchAppsConcurrent(ctx, req, fn)
+	}
+
+	// Build index: app name → position in the original Apps slice.
+	idxByName := make(map[string]int, len(req.Apps))
+	for i, name := range req.Apps {
+		idxByName[name] = i
+	}
+
+	// Group apps by tier.
+	tierApps := make(map[string][]string)
+	for _, name := range req.Apps {
+		tier := req.AppTiers[name]
+		if tier == "" {
+			tier = DefaultTier
+		}
+		tierApps[tier] = append(tierApps[tier], name)
+	}
+
+	// Sort tiers lexically: "0-operators" < "1-data" < "2-services".
+	tiers := make([]string, 0, len(tierApps))
+	for t := range tierApps {
+		tiers = append(tiers, t)
+	}
+	sort.Strings(tiers)
+
+	results := make([]Result, len(req.Apps))
+	for i, name := range req.Apps {
+		results[i] = Result{App: name}
+	}
+	compositeCode := ExitSuccess
+
+	for _, tier := range tiers {
+		apps := tierApps[tier]
+		o.log.Info("watching tier", zap.String("tier", tier), zap.Strings("apps", apps))
+
+		// Build a sub-request with only this tier's apps (shares the same context/timeout).
+		tierReq := req
+		tierReq.Apps = apps
+
+		tierResults, tierCode := o.watchAppsConcurrent(ctx, tierReq, fn)
+
+		// Map tier results back into the overall results slice.
+		for j, name := range apps {
+			results[idxByName[name]] = tierResults[j]
+		}
+
+		if tierCode > compositeCode {
+			compositeCode = tierCode
+		}
+
+		// Abort remaining tiers on hard failure — no point deploying services
+		// if their data layer is broken.
+		if tierCode == ExitFailure {
+			o.log.Warn("tier failed, skipping remaining tiers", zap.String("tier", tier))
+			break
+		}
+
+		// Also stop if the context expired (shared timeout pool exhausted).
+		if ctx.Err() != nil {
+			break
+		}
+	}
+
+	return results, compositeCode
+}
+
+// watchAppsConcurrent watches all apps in req.Apps concurrently and returns
+// their results plus a composite ExitCode once all goroutines have finished.
+func (o *Orchestrator) watchAppsConcurrent(ctx context.Context, req Request, fn watchFn) ([]Result, ExitCode) {
 	type entry struct {
 		idx int
 		res Result

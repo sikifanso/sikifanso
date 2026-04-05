@@ -12,6 +12,7 @@ import (
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/appsetreconcile"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcsync"
+	"github.com/alicanalbayrak/sikifanso/internal/catalog"
 	"github.com/alicanalbayrak/sikifanso/internal/kube"
 	"github.com/alicanalbayrak/sikifanso/internal/session"
 	"github.com/urfave/cli/v3"
@@ -108,6 +109,7 @@ func syncAfterMutation(ctx context.Context, cmd *cli.Command, sess *session.Sess
 		Timeout:   cmd.Duration("timeout"),
 		Prune:     true,
 		Operation: opts.Operation,
+		AppTiers:  buildAppTiers(sess.GitOpsPath, opts.Apps),
 		ReconcileFn: func(ctx context.Context) error {
 			return reconciler.Trigger(ctx, opts.AppSetName)
 		},
@@ -180,4 +182,36 @@ func printSyncResults(w io.Writer, results []grpcsync.Result) {
 			}
 		}
 	}
+}
+
+// buildAppTiers returns a map of app name → tier for tier-aware sequencing.
+// Returns nil when gitOpsPath is empty or catalog listing fails (falls back
+// to concurrent mode).
+func buildAppTiers(gitOpsPath string, apps []string) map[string]string {
+	if gitOpsPath == "" {
+		return nil
+	}
+	entries, err := catalog.List(gitOpsPath)
+	if err != nil {
+		zapLogger.Warn("catalog listing failed, falling back to concurrent sync", zap.Error(err))
+		return nil
+	}
+	tierByName := make(map[string]string, len(entries))
+	for _, e := range entries {
+		if e.Tier != "" {
+			tierByName[e.Name] = e.Tier
+		}
+	}
+	result := make(map[string]string, len(apps))
+	hasTier := false
+	for _, name := range apps {
+		if t, ok := tierByName[name]; ok {
+			result[name] = t
+			hasTier = true
+		}
+	}
+	if !hasTier {
+		return nil
+	}
+	return result
 }

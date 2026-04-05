@@ -266,3 +266,245 @@ func TestSyncAndWait_DegradedPersists(t *testing.T) {
 		t.Error("results[0].Resources is empty — expected resource detail after grace period")
 	}
 }
+
+// --- Tier-aware watchApps tests ---
+
+// multiAppClient is a test double that serves different watch events per app name.
+// It records the order in which WatchApplication is called so tests can verify
+// tier sequencing.
+type multiAppClient struct {
+	// perApp maps app name → events to send on its watch channel.
+	perApp map[string][]grpcclient.WatchEvent
+	// watchOrder records the order of WatchApplication calls (thread-safe via channel).
+	watchOrder chan string
+}
+
+func newMultiAppClient(perApp map[string][]grpcclient.WatchEvent) *multiAppClient {
+	return &multiAppClient{
+		perApp:     perApp,
+		watchOrder: make(chan string, 32),
+	}
+}
+
+func (m *multiAppClient) WatchApplication(ctx context.Context, name string) (<-chan grpcclient.WatchEvent, error) {
+	m.watchOrder <- name
+	events := m.perApp[name]
+	ch := make(chan grpcclient.WatchEvent, len(events)+1)
+	go func() {
+		defer close(ch)
+		for _, e := range events {
+			select {
+			case ch <- e:
+			case <-ctx.Done():
+				return
+			}
+		}
+		<-ctx.Done()
+	}()
+	return ch, nil
+}
+
+func (m *multiAppClient) GetApplication(_ context.Context, name string) (*grpcclient.AppDetail, error) {
+	events := m.perApp[name]
+	if len(events) == 0 {
+		return nil, errors.New("not found")
+	}
+	last := events[len(events)-1]
+	return &grpcclient.AppDetail{
+		AppStatus: last.App,
+	}, nil
+}
+
+func (m *multiAppClient) SyncApplication(_ context.Context, _ string, _ grpcclient.SyncOptions) error {
+	return nil
+}
+
+func (m *multiAppClient) ResourceTree(_ context.Context, _ string) ([]grpcclient.ResourceStatus, error) {
+	return nil, nil
+}
+
+// drainWatchOrder reads all entries from the watchOrder channel (non-blocking)
+// and returns them in order.
+func (m *multiAppClient) drainWatchOrder() []string {
+	var order []string
+	for {
+		select {
+		case name := <-m.watchOrder:
+			order = append(order, name)
+		default:
+			return order
+		}
+	}
+}
+
+// healthyEvent returns a WatchEvent with Synced+Healthy for the given app name.
+func healthyEvent(name string) grpcclient.WatchEvent {
+	return grpcclient.WatchEvent{
+		App: grpcclient.AppStatus{Name: name, SyncStatus: "Synced", Health: "Healthy"},
+	}
+}
+
+// degradedEvent returns a WatchEvent with Synced+Degraded for the given app name.
+func degradedEvent(name string) grpcclient.WatchEvent {
+	return grpcclient.WatchEvent{
+		App: grpcclient.AppStatus{Name: name, SyncStatus: "Synced", Health: "Degraded"},
+	}
+}
+
+// TestWatchApps_TierSequencing verifies that when AppTiers is set, apps are
+// watched in tier order: tier-0 completes before tier-1 starts, etc.
+func TestWatchApps_TierSequencing(t *testing.T) {
+	t.Parallel()
+
+	fake := newMultiAppClient(map[string][]grpcclient.WatchEvent{
+		"cnpg-operator": {healthyEvent("cnpg-operator")},
+		"postgresql":    {healthyEvent("postgresql")},
+		"langfuse":      {healthyEvent("langfuse")},
+	})
+
+	orch := &Orchestrator{client: fake, log: zap.NewNop()}
+	results, code := orch.SyncAndWait(context.Background(), Request{
+		Apps:    []string{"langfuse", "cnpg-operator", "postgresql"},
+		Timeout: 10 * time.Second,
+		AppTiers: map[string]string{
+			"cnpg-operator": "0-operators",
+			"postgresql":    "1-data",
+			"langfuse":      "2-services",
+		},
+	})
+
+	if code != ExitSuccess {
+		t.Fatalf("exit code = %d, want ExitSuccess; results = %+v", code, results)
+	}
+
+	order := fake.drainWatchOrder()
+	if len(order) != 3 {
+		t.Fatalf("watchOrder has %d entries, want 3: %v", len(order), order)
+	}
+
+	// tier-0 must come first, tier-2 must come last.
+	if order[0] != "cnpg-operator" {
+		t.Errorf("first watched app = %q, want cnpg-operator (tier-0)", order[0])
+	}
+	if order[1] != "postgresql" {
+		t.Errorf("second watched app = %q, want postgresql (tier-1)", order[1])
+	}
+	if order[2] != "langfuse" {
+		t.Errorf("third watched app = %q, want langfuse (tier-2)", order[2])
+	}
+}
+
+// TestWatchApps_TierFailureAbortsRemaining verifies that if a tier-0 app
+// fails (Degraded), tier-1 and tier-2 apps are never watched.
+func TestWatchApps_TierFailureAbortsRemaining(t *testing.T) {
+	t.Parallel()
+
+	fake := newMultiAppClient(map[string][]grpcclient.WatchEvent{
+		"cnpg-operator": {degradedEvent("cnpg-operator")},
+		"postgresql":    {healthyEvent("postgresql")},
+		"langfuse":      {healthyEvent("langfuse")},
+	})
+
+	orch := &Orchestrator{client: fake, log: zap.NewNop()}
+	results, code := orch.SyncAndWait(context.Background(), Request{
+		Apps:    []string{"langfuse", "cnpg-operator", "postgresql"},
+		Timeout: 10 * time.Second,
+		AppTiers: map[string]string{
+			"cnpg-operator": "0-operators",
+			"postgresql":    "1-data",
+			"langfuse":      "2-services",
+		},
+		DegradedGracePeriod: 50 * time.Millisecond, // short for test speed
+	})
+
+	if code != ExitFailure {
+		t.Fatalf("exit code = %d, want ExitFailure; results = %+v", code, results)
+	}
+
+	order := fake.drainWatchOrder()
+	// Only tier-0 should have been watched — tier-1 and tier-2 should be skipped.
+	if len(order) != 1 {
+		t.Fatalf("watchOrder has %d entries, want 1 (only tier-0): %v", len(order), order)
+	}
+	if order[0] != "cnpg-operator" {
+		t.Errorf("watched app = %q, want cnpg-operator", order[0])
+	}
+
+	// Verify that skipped apps still have their initial empty results.
+	for _, r := range results {
+		if r.App == "langfuse" && r.Health == "Healthy" {
+			t.Error("langfuse should not have been watched")
+		}
+		if r.App == "postgresql" && r.Health == "Healthy" {
+			t.Error("postgresql should not have been watched")
+		}
+	}
+}
+
+// TestWatchApps_NilAppTiers_Concurrent verifies backward compatibility:
+// when AppTiers is nil, all apps are watched concurrently.
+func TestWatchApps_NilAppTiers_Concurrent(t *testing.T) {
+	t.Parallel()
+
+	fake := newMultiAppClient(map[string][]grpcclient.WatchEvent{
+		"app-a": {healthyEvent("app-a")},
+		"app-b": {healthyEvent("app-b")},
+		"app-c": {healthyEvent("app-c")},
+	})
+
+	orch := &Orchestrator{client: fake, log: zap.NewNop()}
+	results, code := orch.SyncAndWait(context.Background(), Request{
+		Apps:    []string{"app-a", "app-b", "app-c"},
+		Timeout: 10 * time.Second,
+		// AppTiers is nil — concurrent mode.
+	})
+
+	if code != ExitSuccess {
+		t.Fatalf("exit code = %d, want ExitSuccess; results = %+v", code, results)
+	}
+	if len(results) != 3 {
+		t.Fatalf("len(results) = %d, want 3", len(results))
+	}
+	for _, r := range results {
+		if r.Health != "Healthy" {
+			t.Errorf("app %s health = %q, want Healthy", r.App, r.Health)
+		}
+	}
+}
+
+// TestWatchApps_DefaultTier verifies that apps missing from AppTiers map
+// are placed into the default tier (0-operators).
+func TestWatchApps_DefaultTier(t *testing.T) {
+	t.Parallel()
+
+	fake := newMultiAppClient(map[string][]grpcclient.WatchEvent{
+		"untiered-app": {healthyEvent("untiered-app")},
+		"langfuse":     {healthyEvent("langfuse")},
+	})
+
+	orch := &Orchestrator{client: fake, log: zap.NewNop()}
+	results, code := orch.SyncAndWait(context.Background(), Request{
+		Apps:    []string{"langfuse", "untiered-app"},
+		Timeout: 10 * time.Second,
+		AppTiers: map[string]string{
+			// untiered-app is not in the map — should default to "0-operators"
+			"langfuse": "2-services",
+		},
+	})
+
+	if code != ExitSuccess {
+		t.Fatalf("exit code = %d, want ExitSuccess; results = %+v", code, results)
+	}
+
+	order := fake.drainWatchOrder()
+	if len(order) != 2 {
+		t.Fatalf("watchOrder has %d entries, want 2: %v", len(order), order)
+	}
+	// untiered-app → tier-0 (default), langfuse → tier-2; so untiered first.
+	if order[0] != "untiered-app" {
+		t.Errorf("first watched = %q, want untiered-app (default tier-0)", order[0])
+	}
+	if order[1] != "langfuse" {
+		t.Errorf("second watched = %q, want langfuse (tier-2)", order[1])
+	}
+}

@@ -37,7 +37,15 @@ type Request struct {
 	// DegradedGracePeriod is how long SyncAndWait tolerates Synced+Degraded before
 	// reporting failure. Zero is replaced by DefaultDegradedGracePeriod.
 	DegradedGracePeriod time.Duration
+	// AppTiers maps app name → tier string (e.g. "0-operators", "1-data", "2-services").
+	// When non-nil, watchApps sequences goroutine launches by tier: all tier-0 apps
+	// are watched first; tier-1 starts only after tier-0 completes successfully, etc.
+	// Apps missing from the map default to DefaultTier. When nil, all apps run concurrently.
+	AppTiers map[string]string
 }
+
+// DefaultTier is assigned to apps with no explicit tier.
+const DefaultTier = "0-operators"
 
 // Result holds the observed state of a single application after a sync operation.
 type Result struct {
