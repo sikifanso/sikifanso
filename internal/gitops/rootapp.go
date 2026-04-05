@@ -20,9 +20,14 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// bootstrapManifests lists the manifests that ApplyRootApp applies to the cluster.
-var bootstrapManifests = []string{
+// infraManifests are applied first — they manage core platform apps
+// (Cilium, ArgoCD) that must be healthy before workloads start.
+var infraManifests = []string{
 	"bootstrap/root-app.yaml",
+}
+
+// workloadManifests are applied after infrastructure apps are healthy.
+var workloadManifests = []string{
 	"bootstrap/root-catalog.yaml",
 	"bootstrap/root-agents.yaml",
 }
@@ -30,6 +35,24 @@ var bootstrapManifests = []string{
 // ApplyRootApp reads the bootstrap ApplicationSet manifests from the gitops
 // directory and applies them to the cluster via Server-Side Apply.
 func ApplyRootApp(ctx context.Context, log *zap.Logger, restCfg *rest.Config, gitopsDir string) error {
+	manifests := make([]string, 0, len(infraManifests)+len(workloadManifests))
+	manifests = append(manifests, infraManifests...)
+	manifests = append(manifests, workloadManifests...)
+	return applyManifests(ctx, log, restCfg, gitopsDir, manifests)
+}
+
+// ApplyInfraManifests applies only the infrastructure ApplicationSet
+// (root-app.yaml) that manages Cilium and ArgoCD.
+func ApplyInfraManifests(ctx context.Context, log *zap.Logger, restCfg *rest.Config, gitopsDir string) error {
+	return applyManifests(ctx, log, restCfg, gitopsDir, infraManifests)
+}
+
+// ApplyWorkloadManifests applies the catalog and agent ApplicationSets.
+func ApplyWorkloadManifests(ctx context.Context, log *zap.Logger, restCfg *rest.Config, gitopsDir string) error {
+	return applyManifests(ctx, log, restCfg, gitopsDir, workloadManifests)
+}
+
+func applyManifests(ctx context.Context, log *zap.Logger, restCfg *rest.Config, gitopsDir string, manifests []string) error {
 	dc, err := dynamic.NewForConfig(restCfg)
 	if err != nil {
 		return fmt.Errorf("creating dynamic client: %w", err)
@@ -41,7 +64,7 @@ func ApplyRootApp(ctx context.Context, log *zap.Logger, restCfg *rest.Config, gi
 	}
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(disc))
 
-	for _, rel := range bootstrapManifests {
+	for _, rel := range manifests {
 		if err := applyManifest(ctx, log, dc, mapper, filepath.Join(gitopsDir, rel)); err != nil {
 			return err
 		}

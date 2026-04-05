@@ -232,26 +232,40 @@ func installInfra(ctx context.Context, log *zap.Logger, restCfg *rest.Config, na
 		return nil, fmt.Errorf("waiting for argocd gRPC: %w", err)
 	}
 
-	if err := argocd.CreateApplications(ctx, log, restCfg, cfg.ArgoCD.Namespace,
-		argocd.AppParams{
+	infraApps := []argocd.AppParams{
+		{
 			Name: cfg.Cilium.ReleaseName, Namespace: cfg.Cilium.Namespace,
 			RepoURL: cfg.Cilium.RepoURL, ChartName: cfg.Cilium.Chart,
 			ChartVersion: ciliumResult.ChartVersion,
 			Values:       ciliumValues,
 		},
-		argocd.AppParams{
+		{
 			Name: cfg.ArgoCD.ReleaseName, Namespace: cfg.ArgoCD.Namespace,
 			RepoURL: cfg.ArgoCD.RepoURL, ChartName: cfg.ArgoCD.Chart,
 			ChartVersion: argocdResult.ChartVersion,
 			Values:       argocdValues,
 		},
-	); err != nil {
+	}
+
+	if err := argocd.CreateApplications(ctx, log, restCfg, cfg.ArgoCD.Namespace, infraApps...); err != nil {
 		return nil, fmt.Errorf("creating argocd applications: %w", err)
 	}
 
-	// Apply root application from the scaffolded gitops repo.
-	if err := gitops.ApplyRootApp(ctx, log, restCfg, gitopsDir); err != nil {
-		return nil, fmt.Errorf("applying root application: %w", err)
+	// Apply the infrastructure ApplicationSet first — Cilium and ArgoCD must be
+	// healthy before workload ApplicationSets start, to avoid resource contention
+	// on constrained hosts.
+	if err := gitops.ApplyInfraManifests(ctx, log, restCfg, gitopsDir); err != nil {
+		return nil, fmt.Errorf("applying infrastructure applicationset: %w", err)
+	}
+
+	if err := argocd.WaitForApplicationsHealthy(ctx, log, restCfg, cfg.ArgoCD.Namespace,
+		[]string{cfg.Cilium.ReleaseName, cfg.ArgoCD.ReleaseName}); err != nil {
+		return nil, fmt.Errorf("waiting for infrastructure applications: %w", err)
+	}
+
+	// Catalog and agent ApplicationSets depend on CRDs and webhooks from the infra phase.
+	if err := gitops.ApplyWorkloadManifests(ctx, log, restCfg, gitopsDir); err != nil {
+		return nil, fmt.Errorf("applying workload applicationsets: %w", err)
 	}
 
 	return argocdResult, nil
