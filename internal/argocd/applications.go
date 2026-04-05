@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
 )
 
@@ -36,17 +36,12 @@ type AppParams struct {
 // CreateApplications registers each app as an ArgoCD Application CRD
 // in the given argocdNamespace. If empty, it defaults to "argocd".
 // If an Application already exists, it logs a warning and continues.
-func CreateApplications(ctx context.Context, log *zap.Logger, argocdNamespace string, apps ...AppParams) error {
+func CreateApplications(ctx context.Context, log *zap.Logger, restCfg *rest.Config, argocdNamespace string, apps ...AppParams) error {
 	if argocdNamespace == "" {
 		argocdNamespace = DefaultNamespace
 	}
 
-	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
-	if err != nil {
-		return fmt.Errorf("building kubeconfig: %w", err)
-	}
-
-	dc, err := dynamic.NewForConfig(config)
+	dc, err := dynamic.NewForConfig(restCfg)
 	if err != nil {
 		return fmt.Errorf("creating dynamic client: %w", err)
 	}

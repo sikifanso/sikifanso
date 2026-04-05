@@ -14,7 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/rest"
 )
 
 const (
@@ -32,7 +32,7 @@ type InstallResult struct {
 // Chart coordinates and pre-merged values (including runtime overrides)
 // are provided by the caller. On failure the cluster is intentionally
 // left running so the user can debug with kubectl.
-func Install(ctx context.Context, log *zap.Logger, clusterName string, chart infraconfig.ChartConfig, vals map[string]interface{}) (*InstallResult, error) {
+func Install(ctx context.Context, log *zap.Logger, restCfg *rest.Config, clusterName string, chart infraconfig.ChartConfig, vals map[string]interface{}) (*InstallResult, error) {
 	containerName := fmt.Sprintf("k3d-%s-server-0", clusterName)
 	log.Info("detecting API server IP", zap.String("container", containerName))
 	apiServerIP, err := detectAPIServerIP(ctx, clusterName)
@@ -67,7 +67,12 @@ func Install(ctx context.Context, log *zap.Logger, clusterName string, chart inf
 	}
 	log.Info("cilium deployed successfully")
 
-	if err := waitForNodes(ctx); err != nil {
+	kubeClient, err := kubernetes.NewForConfig(restCfg)
+	if err != nil {
+		return nil, fmt.Errorf("creating kubernetes client: %w", err)
+	}
+
+	if err := waitForNodes(ctx, kubeClient); err != nil {
 		return nil, fmt.Errorf("waiting for nodes: %w", err)
 	}
 	log.Info("all nodes are ready")
@@ -100,17 +105,7 @@ func detectAPIServerIP(ctx context.Context, clusterName string) (string, error) 
 
 // waitForNodes polls all Kubernetes nodes until every node reports
 // condition Ready=True, or the timeout expires. A spinner shows progress.
-func waitForNodes(ctx context.Context) error {
-	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
-	if err != nil {
-		return fmt.Errorf("building kubeconfig: %w", err)
-	}
-
-	cs, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return fmt.Errorf("creating kubernetes client: %w", err)
-	}
-
+func waitForNodes(ctx context.Context, kubeClient kubernetes.Interface) error {
 	s := spinner.New(spinner.CharSets[11], 120*time.Millisecond, spinner.WithWriter(os.Stderr))
 	s.Suffix = " Waiting for nodes to be ready..."
 	s.Start()
@@ -120,7 +115,7 @@ func waitForNodes(ctx context.Context) error {
 	defer cancel()
 
 	for {
-		nodes, err := cs.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		nodes, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return fmt.Errorf("listing nodes: %w", err)
 		}

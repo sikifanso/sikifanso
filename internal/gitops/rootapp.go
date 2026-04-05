@@ -14,8 +14,8 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 )
@@ -29,18 +29,13 @@ var bootstrapManifests = []string{
 
 // ApplyRootApp reads the bootstrap ApplicationSet manifests from the gitops
 // directory and applies them to the cluster via Server-Side Apply.
-func ApplyRootApp(ctx context.Context, log *zap.Logger, gitopsDir string) error {
-	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
-	if err != nil {
-		return fmt.Errorf("building kubeconfig: %w", err)
-	}
-
-	dc, err := dynamic.NewForConfig(config)
+func ApplyRootApp(ctx context.Context, log *zap.Logger, restCfg *rest.Config, gitopsDir string) error {
+	dc, err := dynamic.NewForConfig(restCfg)
 	if err != nil {
 		return fmt.Errorf("creating dynamic client: %w", err)
 	}
 
-	disc, err := discovery.NewDiscoveryClientForConfig(config)
+	disc, err := discovery.NewDiscoveryClientForConfig(restCfg)
 	if err != nil {
 		return fmt.Errorf("creating discovery client: %w", err)
 	}
