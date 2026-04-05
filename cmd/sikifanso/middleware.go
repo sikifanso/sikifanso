@@ -194,7 +194,7 @@ func summarizeUnhealthy(results []grpcsync.Result) string {
 			continue
 		}
 		detail := fmt.Sprintf("%s (sync=%s health=%s)", r.App, r.SyncStatus, r.Health)
-		// Only the first unhealthy resource — keep the error line scannable.
+		// First unhealthy resource with a non-empty message — keeps the error line scannable.
 		for _, res := range r.Resources {
 			if res.Health != "" && res.Health != "Healthy" && res.Message != "" {
 				detail += fmt.Sprintf(" [%s/%s: %s]", res.Kind, res.Name, res.Message)
