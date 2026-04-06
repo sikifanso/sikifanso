@@ -30,7 +30,7 @@
 | P18 | Medium | ResourceTree misses sync error messages | Open | |
 | P19 | Medium | gRPC connection has no keep-alive | Open | |
 | P20 | Medium | agent-full exceeds safe memory for 8-16 GiB hosts | Open | |
-| P21 | Medium | Temporal values missing per-service resources + Elasticsearch | Open | |
+| P21 | Medium | Temporal values missing per-service resources + Elasticsearch | **Done** | Per-service resources + elasticsearch.enabled: false |
 | P22 | Medium | Prometheus PVC oversized at 20 GiB | Open | |
 | P23 | Medium | Agent sandbox ResourceQuota forces Guaranteed QoS | Open | |
 | P24 | Low | cnpg-operator has no resource requests/limits | Open | |
@@ -56,7 +56,7 @@
 | T12 | Medium | Startup ApplicationSet sequencing in cluster create | **Done** | P17 — PR #15; phased bootstrap with WaitForApplicationsHealthy |
 | T13 | Medium | Actionable error messages from Result slice | **Done** | P13 — PR #16 |
 | T14 | Medium | Fix spinner data race + multi-app progress | **Done** | P15 — progressTracker with mutex + multi-app suffix |
-| T15 | Medium | Temporal per-service resources + disable Elasticsearch | Open | P21 |
+| T15 | Medium | Temporal per-service resources + disable Elasticsearch | **Done** | P21 — per-service resource blocks + elasticsearch.enabled: false |
 | T16 | Medium | Reduce Prometheus PVC + add retentionSize guard | Open | P22 |
 | T17 | Medium | Separate ResourceQuota requests/limits in agent-template | Open | P23 |
 
@@ -64,8 +64,8 @@
 
 ## Summary
 
-- **Completed**: 14/17 tasks (T1–T14 + associated review fixes)
+- **Completed**: 15/17 tasks (T1–T15 + associated review fixes)
 - **Remaining Critical**: 0
 - **Remaining High**: 0
-- **Remaining Medium**: 3 (T15–T17)
+- **Remaining Medium**: 2 (T16–T17)
 - **Low (no task)**: 2 (P24, P25)
