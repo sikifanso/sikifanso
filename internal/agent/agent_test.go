@@ -12,10 +12,12 @@ func TestCreate_WritesEntryAndValues(t *testing.T) {
 	dir := setupGitOps(t)
 
 	err := Create(dir, CreateOpts{
-		Name:   "my-agent",
-		CPU:    "250m",
-		Memory: "256Mi",
-		Pods:   "5",
+		Name:          "my-agent",
+		CPURequest:    "125m",
+		CPULimit:      "500m",
+		MemoryRequest: "128Mi",
+		MemoryLimit:   "512Mi",
+		Pods:          "5",
 	})
 	if err != nil {
 		t.Fatalf("Create error: %v", err)
@@ -38,18 +40,24 @@ func TestCreate_WritesEntryAndValues(t *testing.T) {
 		t.Error("entry missing chart")
 	}
 
-	// Values file exists.
+	// Values file exists with separate request/limit fields.
 	valuesFile := filepath.Join(dir, "agents", "values", "my-agent.yaml")
 	vData, err := os.ReadFile(valuesFile)
 	if err != nil {
 		t.Fatalf("values file not found: %v", err)
 	}
 	vContent := string(vData)
-	if !contains(vContent, "cpu: 250m") {
-		t.Error("values missing cpu")
+	if !contains(vContent, "cpuRequest: 125m") {
+		t.Error("values missing cpuRequest")
 	}
-	if !contains(vContent, "memory: 256Mi") {
-		t.Error("values missing memory")
+	if !contains(vContent, "cpuLimit: 500m") {
+		t.Error("values missing cpuLimit")
+	}
+	if !contains(vContent, "memoryRequest: 128Mi") {
+		t.Error("values missing memoryRequest")
+	}
+	if !contains(vContent, "memoryLimit: 512Mi") {
+		t.Error("values missing memoryLimit")
 	}
 }
 
@@ -68,11 +76,17 @@ func TestCreate_DefaultValues(t *testing.T) {
 		t.Fatalf("values file not found: %v", err)
 	}
 	content := string(data)
-	if !contains(content, "cpu: 500m") {
-		t.Error("expected default cpu 500m")
+	if !contains(content, "cpuRequest: 250m") {
+		t.Error("expected default cpuRequest 250m")
 	}
-	if !contains(content, "memory: 512Mi") {
-		t.Error("expected default memory 512Mi")
+	if !contains(content, "cpuLimit: 1000m") {
+		t.Error("expected default cpuLimit 1000m")
+	}
+	if !contains(content, "memoryRequest: 256Mi") {
+		t.Error("expected default memoryRequest 256Mi")
+	}
+	if !contains(content, "memoryLimit: 1Gi") {
+		t.Error("expected default memoryLimit 1Gi")
 	}
 	if !contains(content, "pods: \"10\"") {
 		t.Error("expected default pods 10")
@@ -141,7 +155,7 @@ func TestList_EmptyDir(t *testing.T) {
 func TestFind_Existing(t *testing.T) {
 	t.Parallel()
 	dir := setupGitOps(t)
-	if err := Create(dir, CreateOpts{Name: "found-me", CPU: "1000m"}); err != nil {
+	if err := Create(dir, CreateOpts{Name: "found-me", CPULimit: "2000m"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -152,8 +166,8 @@ func TestFind_Existing(t *testing.T) {
 	if info.Name != "found-me" {
 		t.Errorf("Name = %q, want found-me", info.Name)
 	}
-	if info.CPU != "1000m" {
-		t.Errorf("CPU = %q, want 1000m", info.CPU)
+	if info.CPULimit != "2000m" {
+		t.Errorf("CPULimit = %q, want 2000m", info.CPULimit)
 	}
 }
 
