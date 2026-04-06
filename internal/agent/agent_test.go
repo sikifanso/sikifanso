@@ -106,6 +106,35 @@ func TestCreate_DuplicateReturnsError(t *testing.T) {
 	}
 }
 
+func TestCreate_RequestExceedsLimitReturnsError(t *testing.T) {
+	t.Parallel()
+	dir := setupGitOps(t)
+
+	// CPU request > limit
+	err := Create(dir, CreateOpts{Name: "bad-cpu", CPURequest: "2000m", CPULimit: "500m"})
+	if err == nil {
+		t.Fatal("expected error when cpuRequest > cpuLimit")
+	}
+	if !contains(err.Error(), "cpuRequest") || !contains(err.Error(), "exceeds") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+
+	// Memory request > limit
+	err = Create(dir, CreateOpts{Name: "bad-mem", MemoryRequest: "2Gi", MemoryLimit: "512Mi"})
+	if err == nil {
+		t.Fatal("expected error when memoryRequest > memoryLimit")
+	}
+	if !contains(err.Error(), "memoryRequest") || !contains(err.Error(), "exceeds") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+
+	// Invalid quantity format
+	err = Create(dir, CreateOpts{Name: "bad-fmt", CPURequest: "notaunit"})
+	if err == nil {
+		t.Fatal("expected error for invalid quantity")
+	}
+}
+
 func TestCreate_InvalidNameReturnsError(t *testing.T) {
 	t.Parallel()
 	dir := setupGitOps(t)

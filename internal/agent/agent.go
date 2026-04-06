@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/alicanalbayrak/sikifanso/internal/gitops"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/yaml"
 )
 
@@ -74,6 +75,33 @@ type Info struct {
 
 var validName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
+// validateQuotas checks that resource requests do not exceed limits.
+func validateQuotas(cpuReq, cpuLim, memReq, memLim string) error {
+	cr, err := resource.ParseQuantity(cpuReq)
+	if err != nil {
+		return fmt.Errorf("invalid cpuRequest %q: %w", cpuReq, err)
+	}
+	cl, err := resource.ParseQuantity(cpuLim)
+	if err != nil {
+		return fmt.Errorf("invalid cpuLimit %q: %w", cpuLim, err)
+	}
+	if cr.Cmp(cl) > 0 {
+		return fmt.Errorf("cpuRequest (%s) exceeds cpuLimit (%s)", cpuReq, cpuLim)
+	}
+	mr, err := resource.ParseQuantity(memReq)
+	if err != nil {
+		return fmt.Errorf("invalid memoryRequest %q: %w", memReq, err)
+	}
+	ml, err := resource.ParseQuantity(memLim)
+	if err != nil {
+		return fmt.Errorf("invalid memoryLimit %q: %w", memLim, err)
+	}
+	if mr.Cmp(ml) > 0 {
+		return fmt.Errorf("memoryRequest (%s) exceeds memoryLimit (%s)", memReq, memLim)
+	}
+	return nil
+}
+
 // AgentsDir returns the path to the agents directory within gitOpsPath.
 func AgentsDir(gitOpsPath string) string {
 	return filepath.Join(gitOpsPath, "agents")
@@ -121,6 +149,10 @@ func Create(gitOpsPath string, opts CreateOpts) error {
 	pods := opts.Pods
 	if pods == "" {
 		pods = DefaultPods
+	}
+
+	if err := validateQuotas(cpuReq, cpuLim, memReq, memLim); err != nil {
+		return err
 	}
 
 	e := entry{
