@@ -20,11 +20,16 @@ const (
 	// DefaultChartVersion is the default chart version to deploy.
 	DefaultChartVersion = "0.1.0"
 
-	DefaultCPURequest    = "250m"
-	DefaultCPULimit      = "1000m"
+	// DefaultCPURequest is the default CPU request quota for an agent namespace.
+	DefaultCPURequest = "250m"
+	// DefaultCPULimit is the default CPU limit quota for an agent namespace.
+	DefaultCPULimit = "1000m"
+	// DefaultMemoryRequest is the default memory request quota for an agent namespace.
 	DefaultMemoryRequest = "256Mi"
-	DefaultMemoryLimit   = "1Gi"
-	DefaultPods          = "10"
+	// DefaultMemoryLimit is the default memory limit quota for an agent namespace.
+	DefaultMemoryLimit = "1Gi"
+	// DefaultPods is the default maximum pod count for an agent namespace.
+	DefaultPods = "10"
 )
 
 // entry is the YAML structure written to agents/<name>.yaml.
@@ -203,10 +208,12 @@ func Create(gitOpsPath string, opts CreateOpts) error {
 func populateQuota(info *Info, valuesFile string) {
 	vData, err := os.ReadFile(valuesFile)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to read agent values file %s: %v\n", valuesFile, err)
 		return
 	}
 	var v values
 	if err := yaml.Unmarshal(vData, &v); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to parse agent values file %s: %v\n", valuesFile, err)
 		return
 	}
 	info.CPURequest = v.Agent.CPURequest

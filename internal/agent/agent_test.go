@@ -201,8 +201,20 @@ func TestFind_Existing(t *testing.T) {
 	if info.Name != "found-me" {
 		t.Errorf("Name = %q, want found-me", info.Name)
 	}
+	if info.CPURequest != DefaultCPURequest {
+		t.Errorf("CPURequest = %q, want %s", info.CPURequest, DefaultCPURequest)
+	}
 	if info.CPULimit != "2000m" {
 		t.Errorf("CPULimit = %q, want 2000m", info.CPULimit)
+	}
+	if info.MemoryRequest != DefaultMemoryRequest {
+		t.Errorf("MemoryRequest = %q, want %s", info.MemoryRequest, DefaultMemoryRequest)
+	}
+	if info.MemoryLimit != DefaultMemoryLimit {
+		t.Errorf("MemoryLimit = %q, want %s", info.MemoryLimit, DefaultMemoryLimit)
+	}
+	if info.Pods != DefaultPods {
+		t.Errorf("Pods = %q, want %s", info.Pods, DefaultPods)
 	}
 }
 
