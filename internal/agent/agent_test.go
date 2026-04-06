@@ -128,6 +128,12 @@ func TestCreate_RequestExceedsLimitReturnsError(t *testing.T) {
 		t.Errorf("unexpected error message: %v", err)
 	}
 
+	// Request == limit is valid (Guaranteed QoS)
+	err = Create(dir, CreateOpts{Name: "equal-rl", CPURequest: "500m", CPULimit: "500m", MemoryRequest: "1Gi", MemoryLimit: "1Gi"})
+	if err != nil {
+		t.Fatalf("request == limit should be valid: %v", err)
+	}
+
 	// Invalid quantity format
 	err = Create(dir, CreateOpts{Name: "bad-fmt", CPURequest: "notaunit"})
 	if err == nil {

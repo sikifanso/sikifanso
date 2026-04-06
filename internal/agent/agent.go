@@ -75,31 +75,28 @@ type Info struct {
 
 var validName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
-// validateQuotas checks that resource requests do not exceed limits.
-func validateQuotas(cpuReq, cpuLim, memReq, memLim string) error {
-	cr, err := resource.ParseQuantity(cpuReq)
+// checkPair validates that a resource request does not exceed its limit.
+func checkPair(req, lim, label string) error {
+	r, err := resource.ParseQuantity(req)
 	if err != nil {
-		return fmt.Errorf("invalid cpuRequest %q: %w", cpuReq, err)
+		return fmt.Errorf("invalid %sRequest %q: %w", label, req, err)
 	}
-	cl, err := resource.ParseQuantity(cpuLim)
+	l, err := resource.ParseQuantity(lim)
 	if err != nil {
-		return fmt.Errorf("invalid cpuLimit %q: %w", cpuLim, err)
+		return fmt.Errorf("invalid %sLimit %q: %w", label, lim, err)
 	}
-	if cr.Cmp(cl) > 0 {
-		return fmt.Errorf("cpuRequest (%s) exceeds cpuLimit (%s)", cpuReq, cpuLim)
-	}
-	mr, err := resource.ParseQuantity(memReq)
-	if err != nil {
-		return fmt.Errorf("invalid memoryRequest %q: %w", memReq, err)
-	}
-	ml, err := resource.ParseQuantity(memLim)
-	if err != nil {
-		return fmt.Errorf("invalid memoryLimit %q: %w", memLim, err)
-	}
-	if mr.Cmp(ml) > 0 {
-		return fmt.Errorf("memoryRequest (%s) exceeds memoryLimit (%s)", memReq, memLim)
+	if r.Cmp(l) > 0 {
+		return fmt.Errorf("%sRequest (%s) exceeds %sLimit (%s)", label, req, label, lim)
 	}
 	return nil
+}
+
+// validateQuotas checks that resource requests do not exceed limits.
+func validateQuotas(cpuReq, cpuLim, memReq, memLim string) error {
+	if err := checkPair(cpuReq, cpuLim, "cpu"); err != nil {
+		return err
+	}
+	return checkPair(memReq, memLim, "memory")
 }
 
 // AgentsDir returns the path to the agents directory within gitOpsPath.
