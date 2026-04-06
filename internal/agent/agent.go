@@ -75,6 +75,16 @@ type Info struct {
 
 var validName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
+func validateName(name string) error {
+	if name == "" {
+		return fmt.Errorf("agent name is required")
+	}
+	if !validName.MatchString(name) {
+		return fmt.Errorf("invalid agent name %q: must match [a-z0-9][a-z0-9-]*", name)
+	}
+	return nil
+}
+
 // checkPair validates that a resource request does not exceed its limit.
 func checkPair(req, lim, label string) error {
 	r, err := resource.ParseQuantity(req)
@@ -106,11 +116,8 @@ func AgentsDir(gitOpsPath string) string {
 
 // Create writes agent entry and values files, then commits to the gitops repo.
 func Create(gitOpsPath string, opts CreateOpts) error {
-	if opts.Name == "" {
-		return fmt.Errorf("agent name is required")
-	}
-	if !validName.MatchString(opts.Name) {
-		return fmt.Errorf("invalid agent name %q: must match [a-z0-9][a-z0-9-]*", opts.Name)
+	if err := validateName(opts.Name); err != nil {
+		return err
 	}
 
 	entryPath := filepath.Join("agents", opts.Name+".yaml")
@@ -254,6 +261,9 @@ func List(gitOpsPath string) ([]Info, error) {
 
 // Find returns the agent with the given name or an error.
 func Find(gitOpsPath, name string) (*Info, error) {
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
 	entryFile := filepath.Join(AgentsDir(gitOpsPath), name+".yaml")
 	data, err := os.ReadFile(entryFile)
 	if err != nil {
@@ -287,6 +297,9 @@ func Find(gitOpsPath, name string) (*Info, error) {
 
 // Delete removes agent entry and values files, then commits.
 func Delete(gitOpsPath, name string) error {
+	if err := validateName(name); err != nil {
+		return err
+	}
 	entryPath := filepath.Join("agents", name+".yaml")
 	absEntry := filepath.Join(gitOpsPath, entryPath)
 	if _, err := os.Stat(absEntry); os.IsNotExist(err) {
