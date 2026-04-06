@@ -30,9 +30,11 @@ func agentCreateCmd() *cli.Command {
 		Usage:     "Create an isolated agent namespace",
 		ArgsUsage: "NAME",
 		Flags: append([]cli.Flag{
-			&cli.StringFlag{Name: "cpu", Usage: "CPU quota", Value: "500m"},
-			&cli.StringFlag{Name: "memory", Usage: "Memory quota", Value: "512Mi"},
-			&cli.StringFlag{Name: "pods", Usage: "Max pods", Value: "10"},
+			&cli.StringFlag{Name: "cpu-request", Usage: "CPU request quota (guaranteed)", Value: agent.DefaultCPURequest},
+			&cli.StringFlag{Name: "cpu-limit", Usage: "CPU limit quota (burst ceiling)", Value: agent.DefaultCPULimit},
+			&cli.StringFlag{Name: "memory-request", Usage: "Memory request quota (guaranteed)", Value: agent.DefaultMemoryRequest},
+			&cli.StringFlag{Name: "memory-limit", Usage: "Memory limit quota (burst ceiling)", Value: agent.DefaultMemoryLimit},
+			&cli.StringFlag{Name: "pods", Usage: "Max pods", Value: agent.DefaultPods},
 		}, waitSyncFlags()...),
 		Action: withSession(func(ctx context.Context, cmd *cli.Command, sess *session.Session) error {
 			name := cmd.Args().First()
@@ -41,10 +43,12 @@ func agentCreateCmd() *cli.Command {
 			}
 
 			if err := agent.Create(sess.GitOpsPath, agent.CreateOpts{
-				Name:   name,
-				CPU:    cmd.String("cpu"),
-				Memory: cmd.String("memory"),
-				Pods:   cmd.String("pods"),
+				Name:          name,
+				CPURequest:    cmd.String("cpu-request"),
+				CPULimit:      cmd.String("cpu-limit"),
+				MemoryRequest: cmd.String("memory-request"),
+				MemoryLimit:   cmd.String("memory-limit"),
+				Pods:          cmd.String("pods"),
 			}); err != nil {
 				return err
 			}
@@ -84,10 +88,10 @@ func agentListCmd() *cli.Command {
 				return nil
 			}
 
-			headers := []string{"NAME", "NAMESPACE", "CPU", "MEMORY", "PODS"}
+			headers := []string{"NAME", "NAMESPACE", "CPU REQ", "CPU LIM", "MEM REQ", "MEM LIM", "PODS"}
 			rows := make([][]string, 0, len(agents))
 			for _, a := range agents {
-				rows = append(rows, []string{a.Name, a.Namespace, a.CPU, a.Memory, a.Pods})
+				rows = append(rows, []string{a.Name, a.Namespace, a.CPURequest, a.CPULimit, a.MemoryRequest, a.MemoryLimit, a.Pods})
 			}
 			printTable(os.Stderr, headers, rows)
 			return nil

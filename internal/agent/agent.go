@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/alicanalbayrak/sikifanso/internal/gitops"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/yaml"
 )
 
@@ -18,6 +19,17 @@ const (
 	DefaultChartRepoURL = "https://sikifanso.github.io/sikifanso-agent-template"
 	// DefaultChartVersion is the default chart version to deploy.
 	DefaultChartVersion = "0.1.0"
+
+	// DefaultCPURequest is the default CPU request quota for an agent namespace.
+	DefaultCPURequest = "250m"
+	// DefaultCPULimit is the default CPU limit quota for an agent namespace.
+	DefaultCPULimit = "1000m"
+	// DefaultMemoryRequest is the default memory request quota for an agent namespace.
+	DefaultMemoryRequest = "256Mi"
+	// DefaultMemoryLimit is the default memory limit quota for an agent namespace.
+	DefaultMemoryLimit = "1Gi"
+	// DefaultPods is the default maximum pod count for an agent namespace.
+	DefaultPods = "10"
 )
 
 // entry is the YAML structure written to agents/<name>.yaml.
@@ -35,32 +47,72 @@ type values struct {
 }
 
 type agentValues struct {
-	Name   string `json:"name"`
-	CPU    string `json:"cpu"`
-	Memory string `json:"memory"`
-	Pods   string `json:"pods"`
+	Name          string `json:"name"`
+	CPURequest    string `json:"cpuRequest"`
+	CPULimit      string `json:"cpuLimit"`
+	MemoryRequest string `json:"memoryRequest"`
+	MemoryLimit   string `json:"memoryLimit"`
+	Pods          string `json:"pods"`
 }
 
 // CreateOpts configures agent creation.
 type CreateOpts struct {
-	Name         string
-	CPU          string
-	Memory       string
-	Pods         string
-	ChartRepoURL string
-	ChartVersion string
+	Name          string
+	CPURequest    string
+	CPULimit      string
+	MemoryRequest string
+	MemoryLimit   string
+	Pods          string
+	ChartRepoURL  string
+	ChartVersion  string
 }
 
 // Info holds agent metadata for display.
 type Info struct {
-	Name      string `json:"name"`
-	Namespace string `json:"namespace"`
-	CPU       string `json:"cpu"`
-	Memory    string `json:"memory"`
-	Pods      string `json:"pods"`
+	Name          string `json:"name"`
+	Namespace     string `json:"namespace"`
+	CPURequest    string `json:"cpuRequest"`
+	CPULimit      string `json:"cpuLimit"`
+	MemoryRequest string `json:"memoryRequest"`
+	MemoryLimit   string `json:"memoryLimit"`
+	Pods          string `json:"pods"`
 }
 
 var validName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+
+func validateName(name string) error {
+	if name == "" {
+		return fmt.Errorf("agent name is required")
+	}
+	if !validName.MatchString(name) {
+		return fmt.Errorf("invalid agent name %q: must match [a-z0-9][a-z0-9-]*", name)
+	}
+	return nil
+}
+
+// checkPair validates that a resource request does not exceed its limit.
+func checkPair(req, lim, label string) error {
+	r, err := resource.ParseQuantity(req)
+	if err != nil {
+		return fmt.Errorf("invalid %sRequest %q: %w", label, req, err)
+	}
+	l, err := resource.ParseQuantity(lim)
+	if err != nil {
+		return fmt.Errorf("invalid %sLimit %q: %w", label, lim, err)
+	}
+	if r.Cmp(l) > 0 {
+		return fmt.Errorf("%sRequest (%s) exceeds %sLimit (%s)", label, req, label, lim)
+	}
+	return nil
+}
+
+// validateQuotas checks that resource requests do not exceed limits.
+func validateQuotas(cpuReq, cpuLim, memReq, memLim string) error {
+	if err := checkPair(cpuReq, cpuLim, "cpu"); err != nil {
+		return err
+	}
+	return checkPair(memReq, memLim, "memory")
+}
 
 // AgentsDir returns the path to the agents directory within gitOpsPath.
 func AgentsDir(gitOpsPath string) string {
@@ -69,11 +121,8 @@ func AgentsDir(gitOpsPath string) string {
 
 // Create writes agent entry and values files, then commits to the gitops repo.
 func Create(gitOpsPath string, opts CreateOpts) error {
-	if opts.Name == "" {
-		return fmt.Errorf("agent name is required")
-	}
-	if !validName.MatchString(opts.Name) {
-		return fmt.Errorf("invalid agent name %q: must match [a-z0-9][a-z0-9-]*", opts.Name)
+	if err := validateName(opts.Name); err != nil {
+		return err
 	}
 
 	entryPath := filepath.Join("agents", opts.Name+".yaml")
@@ -90,17 +139,29 @@ func Create(gitOpsPath string, opts CreateOpts) error {
 	if chartVersion == "" {
 		chartVersion = DefaultChartVersion
 	}
-	cpu := opts.CPU
-	if cpu == "" {
-		cpu = "500m"
+	cpuReq := opts.CPURequest
+	if cpuReq == "" {
+		cpuReq = DefaultCPURequest
 	}
-	mem := opts.Memory
-	if mem == "" {
-		mem = "512Mi"
+	cpuLim := opts.CPULimit
+	if cpuLim == "" {
+		cpuLim = DefaultCPULimit
+	}
+	memReq := opts.MemoryRequest
+	if memReq == "" {
+		memReq = DefaultMemoryRequest
+	}
+	memLim := opts.MemoryLimit
+	if memLim == "" {
+		memLim = DefaultMemoryLimit
 	}
 	pods := opts.Pods
 	if pods == "" {
-		pods = "10"
+		pods = DefaultPods
+	}
+
+	if err := validateQuotas(cpuReq, cpuLim, memReq, memLim); err != nil {
+		return err
 	}
 
 	e := entry{
@@ -113,10 +174,12 @@ func Create(gitOpsPath string, opts CreateOpts) error {
 
 	v := values{
 		Agent: agentValues{
-			Name:   opts.Name,
-			CPU:    cpu,
-			Memory: mem,
-			Pods:   pods,
+			Name:          opts.Name,
+			CPURequest:    cpuReq,
+			CPULimit:      cpuLim,
+			MemoryRequest: memReq,
+			MemoryLimit:   memLim,
+			Pods:          pods,
 		},
 	}
 
@@ -139,6 +202,25 @@ func Create(gitOpsPath string, opts CreateOpts) error {
 	}
 
 	return gitops.Commit(gitOpsPath, fmt.Sprintf("agent: create %s", opts.Name), entryPath, valuesPath)
+}
+
+// populateQuota reads an agent values file and fills quota fields on info.
+func populateQuota(info *Info, valuesFile string) {
+	vData, err := os.ReadFile(valuesFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to read agent values file %s: %v\n", valuesFile, err)
+		return
+	}
+	var v values
+	if err := yaml.Unmarshal(vData, &v); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to parse agent values file %s: %v\n", valuesFile, err)
+		return
+	}
+	info.CPURequest = v.Agent.CPURequest
+	info.CPULimit = v.Agent.CPULimit
+	info.MemoryRequest = v.Agent.MemoryRequest
+	info.MemoryLimit = v.Agent.MemoryLimit
+	info.Pods = v.Agent.Pods
 }
 
 // List reads all agent entries from the agents directory.
@@ -168,20 +250,12 @@ func List(gitOpsPath string) ([]Info, error) {
 			return nil, fmt.Errorf("parsing agent file %s: %w", e.Name(), err)
 		}
 
-		// Read values for quota info.
 		info := Info{
 			Name:      ent.Name,
 			Namespace: ent.Namespace,
 		}
 		valuesFile := filepath.Join(dir, "values", ent.Name+".yaml")
-		if vData, err := os.ReadFile(valuesFile); err == nil {
-			var v values
-			if err := yaml.Unmarshal(vData, &v); err == nil {
-				info.CPU = v.Agent.CPU
-				info.Memory = v.Agent.Memory
-				info.Pods = v.Agent.Pods
-			}
-		}
+		populateQuota(&info, valuesFile)
 
 		agents = append(agents, info)
 	}
@@ -194,6 +268,9 @@ func List(gitOpsPath string) ([]Info, error) {
 
 // Find returns the agent with the given name or an error.
 func Find(gitOpsPath, name string) (*Info, error) {
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
 	entryFile := filepath.Join(AgentsDir(gitOpsPath), name+".yaml")
 	data, err := os.ReadFile(entryFile)
 	if err != nil {
@@ -221,19 +298,15 @@ func Find(gitOpsPath, name string) (*Info, error) {
 
 	info := &Info{Name: ent.Name, Namespace: ent.Namespace}
 	valuesFile := filepath.Join(AgentsDir(gitOpsPath), "values", name+".yaml")
-	if vData, err := os.ReadFile(valuesFile); err == nil {
-		var v values
-		if err := yaml.Unmarshal(vData, &v); err == nil {
-			info.CPU = v.Agent.CPU
-			info.Memory = v.Agent.Memory
-			info.Pods = v.Agent.Pods
-		}
-	}
+	populateQuota(info, valuesFile)
 	return info, nil
 }
 
 // Delete removes agent entry and values files, then commits.
 func Delete(gitOpsPath, name string) error {
+	if err := validateName(name); err != nil {
+		return err
+	}
 	entryPath := filepath.Join("agents", name+".yaml")
 	absEntry := filepath.Join(gitOpsPath, entryPath)
 	if _, err := os.Stat(absEntry); os.IsNotExist(err) {

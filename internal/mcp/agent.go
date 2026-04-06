@@ -19,11 +19,13 @@ type agentInfoInput struct {
 }
 
 type agentCreateInput struct {
-	Cluster string `json:"cluster" jsonschema:"Name of the cluster"`
-	Name    string `json:"name" jsonschema:"Name for the new agent"`
-	CPU     string `json:"cpu,omitempty" jsonschema:"CPU quota, e.g. 500m"`
-	Memory  string `json:"memory,omitempty" jsonschema:"Memory quota, e.g. 512Mi"`
-	Pods    string `json:"pods,omitempty" jsonschema:"Max pods, e.g. 10"`
+	Cluster       string `json:"cluster" jsonschema:"Name of the cluster"`
+	Name          string `json:"name" jsonschema:"Name for the new agent"`
+	CPURequest    string `json:"cpuRequest,omitempty" jsonschema:"CPU request quota (guaranteed), e.g. 250m"`
+	CPULimit      string `json:"cpuLimit,omitempty" jsonschema:"CPU limit quota (burst ceiling), e.g. 1000m"`
+	MemoryRequest string `json:"memoryRequest,omitempty" jsonschema:"Memory request quota (guaranteed), e.g. 256Mi"`
+	MemoryLimit   string `json:"memoryLimit,omitempty" jsonschema:"Memory limit quota (burst ceiling), e.g. 1Gi"`
+	Pods          string `json:"pods,omitempty" jsonschema:"Max pods, e.g. 10"`
 }
 
 type agentDeleteInput struct {
@@ -50,8 +52,8 @@ func registerAgentTools(s *mcp.Server, deps *Deps) {
 		var sb strings.Builder
 		sb.WriteString("Agents:\n")
 		for _, a := range agents {
-			fmt.Fprintf(&sb, "  - %s (namespace: %s, cpu: %s, memory: %s, pods: %s)\n",
-				a.Name, a.Namespace, a.CPU, a.Memory, a.Pods)
+			fmt.Fprintf(&sb, "  - %s (namespace: %s, cpu: %s/%s, memory: %s/%s, pods: %s)\n",
+				a.Name, a.Namespace, a.CPURequest, a.CPULimit, a.MemoryRequest, a.MemoryLimit, a.Pods)
 		}
 		return textResult(sb.String())
 	})
@@ -71,8 +73,8 @@ func registerAgentTools(s *mcp.Server, deps *Deps) {
 		var sb strings.Builder
 		fmt.Fprintf(&sb, "Agent: %s\n", info.Name)
 		fmt.Fprintf(&sb, "Namespace: %s\n", info.Namespace)
-		fmt.Fprintf(&sb, "CPU Quota: %s\n", info.CPU)
-		fmt.Fprintf(&sb, "Memory Quota: %s\n", info.Memory)
+		fmt.Fprintf(&sb, "CPU: %s request / %s limit\n", info.CPURequest, info.CPULimit)
+		fmt.Fprintf(&sb, "Memory: %s request / %s limit\n", info.MemoryRequest, info.MemoryLimit)
 		fmt.Fprintf(&sb, "Max Pods: %s\n", info.Pods)
 		return textResult(sb.String())
 	})
@@ -87,10 +89,12 @@ func registerAgentTools(s *mcp.Server, deps *Deps) {
 		}
 
 		opts := agent.CreateOpts{
-			Name:   input.Name,
-			CPU:    input.CPU,
-			Memory: input.Memory,
-			Pods:   input.Pods,
+			Name:          input.Name,
+			CPURequest:    input.CPURequest,
+			CPULimit:      input.CPULimit,
+			MemoryRequest: input.MemoryRequest,
+			MemoryLimit:   input.MemoryLimit,
+			Pods:          input.Pods,
 		}
 		if err := agent.Create(sess.GitOpsPath, opts); err != nil {
 			return errResult(err)
