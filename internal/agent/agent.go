@@ -18,6 +18,7 @@ const (
 	// During development this can be overridden via CreateOpts.ChartRepoURL.
 	DefaultChartRepoURL = "https://sikifanso.github.io/sikifanso-agent-template"
 	// DefaultChartVersion is the default chart version to deploy.
+	// renovate: datasource=helm depName=sikifanso-agent-template registryUrl=https://sikifanso.github.io/sikifanso-agent-template
 	DefaultChartVersion = "0.1.0"
 
 	// DefaultCPURequest is the default CPU request quota for an agent namespace.
