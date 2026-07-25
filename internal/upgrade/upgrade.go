@@ -57,24 +57,33 @@ func upgradeComponent(ctx context.Context, opts Opts, component string, chart in
 		return nil, fmt.Errorf("getting current %s version: %w", component, err)
 	}
 
+	// Upgrades target the version the CLI declares (ChartConfig.TargetRevision),
+	// not whatever happens to be newest upstream. When the revision is pinned,
+	// moving a cluster forward means bumping the pin and releasing, not re-running
+	// upgrade. An empty TargetRevision keeps the old "seek latest" behaviour.
 	ch, err := helm.LocateChart(cfg, settings, helm.InstallParams{
 		Namespace:   chart.Namespace,
 		RepoURL:     chart.RepoURL,
 		ChartName:   chart.Chart,
 		ReleaseName: chart.ReleaseName,
+		Version:     chart.TargetRevision,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("locating latest %s chart: %w", component, err)
+		return nil, fmt.Errorf("locating %s chart: %w", component, err)
 	}
 
 	newVer := ch.Metadata.Version
 	if currentVer == newVer {
+		skipReason := "already at latest version"
+		if chart.TargetRevision != "" {
+			skipReason = fmt.Sprintf("already at configured version %s", chart.TargetRevision)
+		}
 		return &Result{
 			Component:  component,
 			OldVersion: currentVer,
 			NewVersion: newVer,
 			Skipped:    true,
-			SkipReason: "already at latest version",
+			SkipReason: skipReason,
 		}, nil
 	}
 

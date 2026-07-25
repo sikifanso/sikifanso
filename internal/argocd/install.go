@@ -47,6 +47,7 @@ func Install(ctx context.Context, log *zap.Logger, restCfg *rest.Config, chart i
 		RepoURL:       chart.RepoURL,
 		ChartName:     chart.Chart,
 		ReleaseName:   chart.ReleaseName,
+		Version:       chart.TargetRevision,
 		Timeout:       5 * time.Minute,
 		CreateNS:      true,
 		SpinnerSuffix: fmt.Sprintf(" Deploying ArgoCD to %s namespace (this may take a few minutes)...", chart.Namespace),
