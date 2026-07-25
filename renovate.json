@@ -9,6 +9,20 @@
   "labels": ["dependencies"],
   "packageRules": [
     {
+      "description": "Default: batch non-major Go module updates into a single PR. Majors stay individual (separateMajorMinor) because they routinely need import-path changes. Rules below override this for families that must move on their own.",
+      "groupName": "go modules (non-major)",
+      "groupSlug": "go-modules-nonmajor",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["minor", "patch", "digest"]
+    },
+    {
+      "description": "Default: batch non-major Actions updates into a single PR, kept separate from gomod so an unrelated failure does not block both",
+      "groupName": "github actions (non-major)",
+      "groupSlug": "github-actions-nonmajor",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin"]
+    },
+    {
       "description": "k8s libs and the Helm SDK are version-locked to argo-cd v2.14; they must move as one PR",
       "groupName": "kubernetes",
       "matchManagers": ["gomod"],
@@ -46,7 +60,8 @@
       "matchPackageNames": ["go.opentelemetry.io/**"]
     },
     {
-      "description": "Pseudo-version deps churn on every upstream commit; batch them monthly",
+      "description": "Pseudo-version deps churn on every upstream commit; batch them monthly. Needs its own group so the monthly schedule does not conflict with the weekly non-major group above.",
+      "groupName": "argoproj pseudo-versions",
       "matchPackageNames": [
         "github.com/argoproj/gitops-engine",
         "github.com/argoproj/pkg"
