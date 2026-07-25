@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/alicanalbayrak/sikifanso/internal/helm"
 	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
 	"github.com/alicanalbayrak/sikifanso/internal/snapshot"
@@ -43,6 +44,30 @@ func preUpgradeSnapshot(opts Opts, component string) (string, error) {
 	return snapshotName, nil
 }
 
+// skipReason reports why an upgrade should not run, or "" if it should proceed.
+// Helm will happily "upgrade" a release to an older chart, so a deployed version
+// newer than the target — a cluster created before the pin was lowered, or one
+// upgraded out of band — is refused rather than silently downgraded.
+// Unparseable versions fall through to proceeding, matching the prior behaviour.
+func skipReason(currentVer, newVer, targetRevision string) string {
+	if currentVer == newVer {
+		if targetRevision != "" {
+			return fmt.Sprintf("already at configured version %s", targetRevision)
+		}
+		return "already at latest version"
+	}
+
+	cur, curErr := semver.NewVersion(currentVer)
+	next, nextErr := semver.NewVersion(newVer)
+	if curErr != nil || nextErr != nil {
+		return ""
+	}
+	if cur.GreaterThan(next) {
+		return fmt.Sprintf("deployed version %s is newer than target %s, refusing to downgrade", currentVer, newVer)
+	}
+	return ""
+}
+
 // upgradeComponent is the generic upgrade flow for a Helm-managed component.
 func upgradeComponent(ctx context.Context, opts Opts, component string, chart infraconfig.ChartConfig, vals map[string]interface{}) (*Result, error) {
 	log := opts.Log
@@ -73,17 +98,13 @@ func upgradeComponent(ctx context.Context, opts Opts, component string, chart in
 	}
 
 	newVer := ch.Metadata.Version
-	if currentVer == newVer {
-		skipReason := "already at latest version"
-		if chart.TargetRevision != "" {
-			skipReason = fmt.Sprintf("already at configured version %s", chart.TargetRevision)
-		}
+	if reason := skipReason(currentVer, newVer, chart.TargetRevision); reason != "" {
 		return &Result{
 			Component:  component,
 			OldVersion: currentVer,
 			NewVersion: newVer,
 			Skipped:    true,
-			SkipReason: skipReason,
+			SkipReason: reason,
 		}, nil
 	}
 
