@@ -9,7 +9,7 @@ require (
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/docker/docker v27.0.3+incompatible
+	github.com/docker/docker v27.5.1+incompatible
 	github.com/fatih/color v1.16.0
 	github.com/go-git/go-git/v5 v5.13.2
 	github.com/k3d-io/k3d/v5 v5.8.3
