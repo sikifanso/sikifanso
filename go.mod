@@ -12,7 +12,7 @@ require (
 	github.com/docker/docker v27.0.3+incompatible
 	github.com/fatih/color v1.16.0
 	github.com/go-git/go-git/v5 v5.13.2
-	github.com/k3d-io/k3d/v5 v5.8.3
+	github.com/k3d-io/k3d/v5 v5.9.0
 	github.com/modelcontextprotocol/go-sdk v1.4.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/urfave/cli/v3 v3.6.2
