@@ -3,15 +3,21 @@ package infraconfig
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 )
+
+// k3sImagePattern matches a well-formed k3s node image reference. The tests
+// assert the shape rather than a specific tag so that automated bumps of the
+// pinned image in defaults/platform.yaml do not require a test edit.
+var k3sImagePattern = regexp.MustCompile(`^rancher/k3s:v\d+\.\d+\.\d+-k3s\d+$`)
 
 func TestDefaults(t *testing.T) {
 	t.Parallel()
 	cfg := Defaults()
 
-	if cfg.Platform.K3sImage != "rancher/k3s:v1.29.1-k3s2" {
-		t.Errorf("K3sImage = %q, want rancher/k3s:v1.29.1-k3s2", cfg.Platform.K3sImage)
+	if !k3sImagePattern.MatchString(cfg.Platform.K3sImage) {
+		t.Errorf("K3sImage = %q, want a reference matching %s", cfg.Platform.K3sImage, k3sImagePattern)
 	}
 	if cfg.Platform.Servers != 1 {
 		t.Errorf("Servers = %d, want 1", cfg.Platform.Servers)
@@ -40,6 +46,12 @@ func TestDefaults(t *testing.T) {
 	if cfg.Cilium.Namespace != "kube-system" {
 		t.Errorf("Cilium.Namespace = %q", cfg.Cilium.Namespace)
 	}
+	// Pinned, not floating: an empty TargetRevision means Helm installs whatever
+	// is latest upstream, which makes cluster creation non-reproducible. The exact
+	// version is deliberately not asserted so Renovate can bump it.
+	if cfg.Cilium.TargetRevision == "" {
+		t.Error("Cilium.TargetRevision is empty; the chart version must stay pinned")
+	}
 	if cfg.ArgoCD.RepoURL != "https://argoproj.github.io/argo-helm" {
 		t.Errorf("ArgoCD.RepoURL = %q", cfg.ArgoCD.RepoURL)
 	}
@@ -48,6 +60,9 @@ func TestDefaults(t *testing.T) {
 	}
 	if cfg.ArgoCD.Namespace != "argocd" {
 		t.Errorf("ArgoCD.Namespace = %q", cfg.ArgoCD.Namespace)
+	}
+	if cfg.ArgoCD.TargetRevision == "" {
+		t.Error("ArgoCD.TargetRevision is empty; the chart version must stay pinned")
 	}
 	if cfg.CiliumValues == nil {
 		t.Fatal("CiliumValues is nil")
@@ -64,8 +79,8 @@ func TestLoadMissingDir(t *testing.T) {
 		t.Fatalf("Load returned error for missing dir: %v", err)
 	}
 	// Should return defaults
-	if cfg.Platform.K3sImage != "rancher/k3s:v1.29.1-k3s2" {
-		t.Errorf("expected defaults when dir is missing, got K3sImage=%q", cfg.Platform.K3sImage)
+	if want := Defaults().Platform.K3sImage; cfg.Platform.K3sImage != want {
+		t.Errorf("expected defaults when dir is missing, got K3sImage=%q, want %q", cfg.Platform.K3sImage, want)
 	}
 }
 

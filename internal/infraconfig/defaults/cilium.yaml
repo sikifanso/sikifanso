@@ -1,5 +1,6 @@
 repoURL: https://helm.cilium.io/
 chart: cilium
-targetRevision: ""
+# renovate: datasource=helm depName=cilium registryUrl=https://helm.cilium.io/
+targetRevision: "1.19.6"
 namespace: kube-system
 releaseName: cilium

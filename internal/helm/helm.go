@@ -21,6 +21,7 @@ type InstallParams struct {
 	RepoURL       string
 	ChartName     string
 	ReleaseName   string
+	Version       string // chart version to install; empty means latest
 	Timeout       time.Duration
 	CreateNS      bool
 	SpinnerSuffix string
@@ -44,6 +45,8 @@ func LocateChart(cfg *action.Configuration, settings *cli.EnvSettings, p Install
 	install.ReleaseName = p.ReleaseName
 	install.Namespace = p.Namespace
 	install.RepoURL = p.RepoURL
+	// Helm treats an empty Version as "latest", so no conditional is needed.
+	install.Version = p.Version
 
 	chartPath, err := install.LocateChart(p.ChartName, settings)
 	if err != nil {

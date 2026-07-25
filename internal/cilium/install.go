@@ -46,6 +46,7 @@ func Install(ctx context.Context, log *zap.Logger, restCfg *rest.Config, cluster
 		RepoURL:       chart.RepoURL,
 		ChartName:     chart.Chart,
 		ReleaseName:   chart.ReleaseName,
+		Version:       chart.TargetRevision,
 		Timeout:       5 * time.Minute,
 		SpinnerSuffix: fmt.Sprintf(" Deploying Cilium to %s (this may take a few minutes)...", chart.Namespace),
 	}

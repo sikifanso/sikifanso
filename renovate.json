@@ -1,0 +1,97 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "timezone": "Europe/Berlin",
+  "schedule": ["before 6am on monday"],
+  "semanticCommits": "enabled",
+  "dependencyDashboard": true,
+  "prConcurrentLimit": 3,
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "k8s libs and the Helm SDK are version-locked to argo-cd v2.14; they must move as one PR",
+      "groupName": "kubernetes",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": [
+        "k8s.io/**",
+        "helm.sh/helm/v3",
+        "sigs.k8s.io/structured-merge-diff/**"
+      ]
+    },
+    {
+      "description": "Publishes its staging deps as v0.0.0; bot PRs are unresolvable without replace directives",
+      "matchPackageNames": ["k8s.io/kubernetes"],
+      "enabled": false
+    },
+    {
+      "description": "argo-cd v2 to v3 is a module-path migration across 6 files, not a bump",
+      "matchPackageNames": ["github.com/argoproj/argo-cd/v2"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "docker/docker is +incompatible; crossing to v28 needs import changes",
+      "matchPackageNames": ["github.com/docker/docker", "github.com/docker/cli"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "bubbletea/bubbles/lipgloss must never diverge across majors",
+      "groupName": "charmbracelet",
+      "matchPackageNames": ["github.com/charmbracelet/**"]
+    },
+    {
+      "description": "Tree is already internally skewed (otel 1.40.0 vs otelgrpc 0.56.0); bump together",
+      "groupName": "opentelemetry",
+      "matchPackageNames": ["go.opentelemetry.io/**"]
+    },
+    {
+      "description": "Pseudo-version deps churn on every upstream commit; batch them monthly",
+      "matchPackageNames": [
+        "github.com/argoproj/gitops-engine",
+        "github.com/argoproj/pkg"
+      ],
+      "schedule": ["before 6am on the first day of the month"]
+    },
+    {
+      "description": "Node image bumps are a reviewed infra decision, not a routine update",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["rancher/k3s"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Only Actions auto-merge — CI cannot validate cluster creation",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "k3s node image in embedded platform defaults",
+      "managerFilePatterns": ["/^internal/infraconfig/defaults/platform\\.yaml$/"],
+      "matchStrings": [
+        "k3sImage:\\s*\"(?<depName>[^:\"]+):(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-k3s(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Cilium and ArgoCD chart pins (inline renovate markers)",
+      "managerFilePatterns": ["/^internal/infraconfig/defaults/.+\\.yaml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) registryUrl=(?<registryUrl>\\S+)\\s+targetRevision:\\s*\"(?<currentValue>[^\"]+)\""
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Agent chart version pinned in Go source",
+      "managerFilePatterns": ["/^internal/agent/agent\\.go$/"],
+      "matchStrings": [
+        "// renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) registryUrl=(?<registryUrl>\\S+)\\s+DefaultChartVersion\\s*=\\s*\"(?<currentValue>[^\"]+)\""
+      ]
+    }
+  ]
+}

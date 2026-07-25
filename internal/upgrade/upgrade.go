@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/alicanalbayrak/sikifanso/internal/helm"
 	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
 	"github.com/alicanalbayrak/sikifanso/internal/snapshot"
@@ -43,6 +44,30 @@ func preUpgradeSnapshot(opts Opts, component string) (string, error) {
 	return snapshotName, nil
 }
 
+// skipReason reports why an upgrade should not run, or "" if it should proceed.
+// Helm will happily "upgrade" a release to an older chart, so a deployed version
+// newer than the target — a cluster created before the pin was lowered, or one
+// upgraded out of band — is refused rather than silently downgraded.
+// Unparseable versions fall through to proceeding, matching the prior behaviour.
+func skipReason(currentVer, newVer, targetRevision string) string {
+	if currentVer == newVer {
+		if targetRevision != "" {
+			return fmt.Sprintf("already at configured version %s", targetRevision)
+		}
+		return "already at latest version"
+	}
+
+	cur, curErr := semver.NewVersion(currentVer)
+	next, nextErr := semver.NewVersion(newVer)
+	if curErr != nil || nextErr != nil {
+		return ""
+	}
+	if cur.GreaterThan(next) {
+		return fmt.Sprintf("deployed version %s is newer than target %s, refusing to downgrade", currentVer, newVer)
+	}
+	return ""
+}
+
 // upgradeComponent is the generic upgrade flow for a Helm-managed component.
 func upgradeComponent(ctx context.Context, opts Opts, component string, chart infraconfig.ChartConfig, vals map[string]interface{}) (*Result, error) {
 	log := opts.Log
@@ -57,24 +82,29 @@ func upgradeComponent(ctx context.Context, opts Opts, component string, chart in
 		return nil, fmt.Errorf("getting current %s version: %w", component, err)
 	}
 
+	// Upgrades target the version the CLI declares (ChartConfig.TargetRevision),
+	// not whatever happens to be newest upstream. When the revision is pinned,
+	// moving a cluster forward means bumping the pin and releasing, not re-running
+	// upgrade. An empty TargetRevision keeps the old "seek latest" behaviour.
 	ch, err := helm.LocateChart(cfg, settings, helm.InstallParams{
 		Namespace:   chart.Namespace,
 		RepoURL:     chart.RepoURL,
 		ChartName:   chart.Chart,
 		ReleaseName: chart.ReleaseName,
+		Version:     chart.TargetRevision,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("locating latest %s chart: %w", component, err)
+		return nil, fmt.Errorf("locating %s chart: %w", component, err)
 	}
 
 	newVer := ch.Metadata.Version
-	if currentVer == newVer {
+	if reason := skipReason(currentVer, newVer, chart.TargetRevision); reason != "" {
 		return &Result{
 			Component:  component,
 			OldVersion: currentVer,
 			NewVersion: newVer,
 			Skipped:    true,
-			SkipReason: "already at latest version",
+			SkipReason: reason,
 		}, nil
 	}
 
