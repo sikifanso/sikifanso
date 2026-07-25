@@ -11,12 +11,14 @@
     {
       "description": "Default: batch non-major Go module updates into a single PR. Majors stay individual (separateMajorMinor) because they routinely need import-path changes. Rules below override this for families that must move on their own.",
       "groupName": "go modules (non-major)",
+      "groupSlug": "go-modules-nonmajor",
       "matchManagers": ["gomod"],
       "matchUpdateTypes": ["minor", "patch", "digest"]
     },
     {
       "description": "Default: batch non-major Actions updates into a single PR, kept separate from gomod so an unrelated failure does not block both",
       "groupName": "github actions (non-major)",
+      "groupSlug": "github-actions-nonmajor",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["minor", "patch", "digest", "pin"]
     },
