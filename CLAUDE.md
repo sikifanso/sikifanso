@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-Go CLI that bootstraps k3d Kubernetes clusters purpose-built for AI agent infrastructure: Cilium CNI, ArgoCD GitOps reading a local filesystem repo, a curated 17-tool catalog, and isolated agent sandboxes.
+Go CLI that bootstraps k3d Kubernetes clusters purpose-built for AI agent infrastructure: Cilium CNI, ArgoCD GitOps reading a local filesystem repo, a curated app catalog (entries defined in the `sikifanso-homelab-bootstrap` repo, so the set changes independently of this codebase), and isolated agent sandboxes.
 
 ## Build & Test
 
@@ -21,7 +21,7 @@ go test ./internal/catalog/ -run TestFind -race
 
 Go 1.25. Module path is `github.com/alicanalbayrak/sikifanso` (the GitHub remote is `sikifanso/sikifanso` — the module path intentionally differs). CI runs golangci-lint → `go build ./...` → `go test ./... -race`.
 
-Note: `make build` outputs to `bin/`, but `.mcp.json` runs `./sikifanso` at the repo root — rebuild with `go build -o sikifanso ./cmd/sikifanso` to refresh the MCP server binary.
+Note: `make build` outputs to `bin/`, but the checked-in `.mcp.json` runs the `sikifanso` binary at the repo root (via absolute path) — rebuild with `go build -o sikifanso ./cmd/sikifanso` to refresh the MCP server binary.
 
 ## Architecture
 
