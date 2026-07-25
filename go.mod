@@ -14,7 +14,7 @@ require (
 	github.com/go-git/go-git/v5 v5.13.2
 	github.com/k3d-io/k3d/v5 v5.8.3
 	github.com/modelcontextprotocol/go-sdk v1.4.1
-	github.com/sirupsen/logrus v1.9.3
+	github.com/sirupsen/logrus v1.9.4
 	github.com/urfave/cli/v3 v3.6.2
 	go.uber.org/zap v1.27.1
 	golang.org/x/term v0.39.0
