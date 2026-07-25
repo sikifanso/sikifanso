@@ -50,6 +50,23 @@
       "enabled": false
     },
     {
+      "description": "Held: go-git >=5.19 (via go-billy >=5.9) pulls filepath-securejoin up to v0.6.x, but argo-cd v2.14.x calls the top-level securejoin.MkdirAll that v0.5 moved out. Verified locally: build fails in argo-cd util/io/files. Needs its own group so it cannot red the non-major batch; revisit alongside the argo-cd v3 migration.",
+      "groupName": "go-git",
+      "groupSlug": "go-git",
+      "matchPackageNames": [
+        "github.com/go-git/go-git/v5",
+        "github.com/go-git/go-billy/v5"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Held: k3d v5.9 requires Go >=1.26.3 (module targets 1.25) and forces docker/docker v28, which the rule above disables. A minor bump that is really a toolchain change. Needs its own group so it cannot red the non-major batch.",
+      "groupName": "k3d",
+      "groupSlug": "k3d",
+      "matchPackageNames": ["github.com/k3d-io/k3d/v5"],
+      "dependencyDashboardApproval": true
+    },
+    {
       "description": "bubbletea/bubbles/lipgloss must never diverge across majors",
       "groupName": "charmbracelet",
       "matchPackageNames": ["github.com/charmbracelet/**"]
