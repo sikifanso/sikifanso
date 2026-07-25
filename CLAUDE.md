@@ -21,7 +21,7 @@ go test ./internal/catalog/ -run TestFind -race
 
 Go 1.25. Module path is `github.com/alicanalbayrak/sikifanso` (the GitHub remote is `sikifanso/sikifanso` — the module path intentionally differs). CI runs golangci-lint → `go build ./...` → `go test ./... -race`.
 
-Note: `make build` outputs to `bin/`, but the checked-in `.mcp.json` runs the `sikifanso` binary at the repo root (via absolute path) — rebuild with `go build -o sikifanso ./cmd/sikifanso` to refresh the MCP server binary.
+Note: the checked-in `.mcp.json` runs `sikifanso` from PATH — refresh the MCP server binary with `go install ./cmd/sikifanso` (or an installed release on PATH).
 
 ## Architecture
 
