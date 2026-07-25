@@ -19,7 +19,8 @@ site/
 # IDE
 .idea/
 
-# Ignore agent settings
-.claude/
+# Ignore agent settings, but keep shared project skills
+.claude/*
+!.claude/skills/
 PLAN.md
 ROADMAP.md

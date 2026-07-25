@@ -88,6 +88,28 @@ The bootstrap template repo is cloned during `cluster create` (`internal/gitops/
 
 Trust code over `docs/`: the docs still describe a dual-track (two-AppSet) model and a webhook-based sync that no longer exists, and document positional cluster-name args that `rejectPositionalArgs` now rejects.
 
+## Issue Workflow: Design → Implement
+
+Issues are addressed one at a time in two separate sessions with a committed spec as
+the hand-off artifact (no shared session memory is assumed):
+
+1. **Design session** (high-reasoning model, e.g. Fable): run `/design-issue <N>`.
+   Investigates the issue, verifies its claims against current code, researches
+   upstream (k3d/Cilium/ArgoCD versions), compares alternatives, and commits a spec to
+   `docs/specs/<date>-issue-<N>-<slug>.md` with **Status: Draft**. No code changes.
+2. **Human review**: read the spec, resolve its open questions, flip **Status** to
+   `Approved` (or just tell the implementation session "approved").
+3. **Implementation session** (e.g. Opus): run `/implement-design <N>`. Executes the
+   spec's implementation plan without redesigning, runs the test plan, records
+   deviations in the spec, and flips **Status** to `Implemented`. Major deviations
+   (a spec assumption proves false) stop the session instead of improvising.
+
+Spec files follow the existing house style in `docs/specs/` (Date/Status header,
+evidence as `file:line`, external facts with URL + version). `docs/specs/` is not in
+the mkdocs nav, so specs are not published. Remote sessions cannot run Docker/k3d —
+cluster-level verification steps are listed in the spec as manual and handed to the
+human, never claimed as verified.
+
 ## Commit Messages
 
 Do not add `Co-Authored-By` or bot signature lines to commit messages.
