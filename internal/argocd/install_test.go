@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	versionpkg "github.com/argoproj/argo-cd/v2/pkg/apiclient/version"
+	versionpkg "github.com/argoproj/argo-cd/v3/pkg/apiclient/version"
 	"go.uber.org/zap/zaptest"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -18,7 +18,7 @@ type fakeVersionServer struct {
 }
 
 func (f *fakeVersionServer) Version(_ context.Context, _ *emptypb.Empty) (*versionpkg.VersionMessage, error) {
-	return &versionpkg.VersionMessage{Version: "v2.99.0-test"}, nil
+	return &versionpkg.VersionMessage{Version: "v3.99.0-test"}, nil
 }
 
 func startFakeVersionServer(t *testing.T) (addr string, stop func()) {

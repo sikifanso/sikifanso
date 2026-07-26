@@ -8,11 +8,11 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/argoproj/argo-cd/v2/pkg/apiclient"
-	applicationpkg "github.com/argoproj/argo-cd/v2/pkg/apiclient/application"
-	applicationsetpkg "github.com/argoproj/argo-cd/v2/pkg/apiclient/applicationset"
-	projectpkg "github.com/argoproj/argo-cd/v2/pkg/apiclient/project"
-	sessionpkg "github.com/argoproj/argo-cd/v2/pkg/apiclient/session"
+	"github.com/argoproj/argo-cd/v3/pkg/apiclient"
+	applicationpkg "github.com/argoproj/argo-cd/v3/pkg/apiclient/application"
+	applicationsetpkg "github.com/argoproj/argo-cd/v3/pkg/apiclient/applicationset"
+	projectpkg "github.com/argoproj/argo-cd/v3/pkg/apiclient/project"
+	sessionpkg "github.com/argoproj/argo-cd/v3/pkg/apiclient/session"
 )
 
 // Options configures the gRPC connection to an ArgoCD server.

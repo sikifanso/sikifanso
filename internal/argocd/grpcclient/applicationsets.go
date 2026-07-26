@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	applicationsetpkg "github.com/argoproj/argo-cd/v2/pkg/apiclient/applicationset"
-	"github.com/argoproj/argo-cd/v2/pkg/apis/application/v1alpha1"
+	applicationsetpkg "github.com/argoproj/argo-cd/v3/pkg/apiclient/applicationset"
+	"github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 )
 
 // ListApplicationSets returns a summary of every ApplicationSet visible to the

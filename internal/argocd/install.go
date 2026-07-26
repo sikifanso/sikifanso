@@ -8,7 +8,7 @@ import (
 
 	"github.com/alicanalbayrak/sikifanso/internal/helm"
 	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
-	"github.com/argoproj/argo-cd/v2/pkg/apiclient"
+	"github.com/argoproj/argo-cd/v3/pkg/apiclient"
 	"github.com/briandowns/spinner"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/emptypb"

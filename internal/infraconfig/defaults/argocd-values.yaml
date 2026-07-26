@@ -93,7 +93,6 @@ configs:
     admin.enabled: "true"
     timeout.reconciliation: 180s
     statusbadge.enabled: "true"
-    application.resourceTrackingMethod: annotation
     resource.customizations.health.networking.k8s.io_Ingress: |
       hs = {}
       hs.status = "Healthy"
