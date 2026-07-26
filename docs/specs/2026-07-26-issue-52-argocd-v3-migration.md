@@ -384,9 +384,29 @@ Verifiable in a session (no Docker) — **all executed, all pass:**
 - ✅ Finding 3's landmine confirmed handled: `go get` resolved cleanly *with* the
   replace in place, where the spec predicted a bare `go get` would fail outright.
 
-**Manual verification pending** — needs a real Docker/k3d run on the user's machine
-(issue acceptance criteria). None of the following were executed in the implementation
-session; none may be treated as verified:
+**Manual verification COMPLETE** — executed against real Docker/k3d on 2026-07-26,
+ArgoCD server v3.4.5, all passing:
+
+- ✅ `cluster create` — full run green. `WaitForGRPC` resolved in **5 ms**
+  (`12:13:50.645 waiting for ArgoCD gRPC server {"addr":"localhost:60027"}` →
+  `12:13:50.650 ArgoCD gRPC server is ready`), infra apps `cilium` + `argocd` both
+  Synced/Healthy, all three ApplicationSets applied.
+- ✅ `app enable valkey` (12.3 s) → `app disable valkey` (2.0 s) — exercises `OpEnable`
+  (appset annotate → CR poll → watch), tier sequencing (`watching tier {"tier":"1-data"}`),
+  and reverse-tier disable over the v3 gRPC API.
+- ✅ `agent create testagent` (5.9 s) → `agent delete testagent` (63 s) — agents
+  ApplicationSet refresh path.
+- ✅ `cluster stop` → `cluster start` — clean; port mappings preserved.
+- ✅ `app status argocd` — full resource tree over session-authenticated v3 gRPC (0.69 s).
+- ✅ Design D regression check: `kubectl get cm argocd-cm -n argocd -o jsonpath=...`
+  returns **empty** (server default = annotation), and enabled apps still reach Healthy.
+- ✅ Only five host ports are now mapped on the k3d LB, and `argocd-server` exposes
+  NodePorts 30080/30443 only — no phantom gRPC port.
+
+Two defects were found and fixed during this run; both **predate** the v3 migration
+(see the Follow-up defects section below).
+
+Original checklist, for the record:
 
 - `sikifanso cluster create` → ArgoCD v3.4.5 installs, `WaitForGRPC` succeeds, infra
   apps reach Healthy (exercises apiclient + session auth + watch streaming + tier
@@ -420,3 +440,49 @@ session; none may be treated as verified:
    talking to the new CLI simply gets the same gRPC calls from a newer client — the v3
    server already deployed there accepts both. No migration step needed, but the
    acceptance run should still include one `cluster stop` → `cluster start` cycle.
+
+## Follow-up defects found during acceptance testing
+
+Both are independent of the v3 migration (the chart pin, `ports.go` and `platform.yaml`
+were untouched by it) and were fixed on this branch with the user's approval.
+
+### 1. Phantom ArgoCD gRPC NodePort — `cluster create` hung forever
+
+`ArgoCDRuntimeOverrides` injected `server.serviceGrpc.nodePortGrpc`, but the argo-cd
+Helm chart has **no `server.serviceGrpc` key** — verified absent from every chart version
+7.7.5 → 10.2.1. Helm drops unknown values silently, so the gRPC Service was never created
+and NodePort 30084 never existed. k3d still mapped a host port to it, and its load
+balancer accepted the TCP connection with no upstream, so the HTTP/2 handshake never
+completed. Introduced in `56194a5` (2026-03-29).
+
+ArgoCD multiplexes gRPC and REST on the server's single HTTP port (the values file already
+passes `--insecure`), so the separate port was never needed. Fix: removed the invented
+chart key and the phantom port end to end — host port allocation 6 → 5, the 30084 mapping
+dropped, `GRPCAddress` now points at the UI port. Guarded by
+`TestArgoCDRuntimeOverridesUsesOnlyRealChartKeys`, which asserts we never inject a key the
+chart does not define — the failure mode was silent, so a test on rendered output would
+not have caught it.
+
+### 2. `WaitForGRPC` did not honour its own timeout
+
+`apiclient.NewClient` is not a cheap constructor: it eagerly probes the Version endpoint
+to decide whether gRPC-web is needed, and that probe hardcodes `context.Background()`
+upstream (`NewVersionClient` → `newConn` → `waitForReady` → `WaitForStateChange`).
+`NewVersionClient` inside the retry loop has the same problem. A *refused* connection
+fails fast — which is why the pre-existing `TestWaitForGRPC_Timeout` passed — but an
+address that accepts TCP and never speaks blocked indefinitely (measured: >5 min against
+a 12 s context). Fix: race both client construction and each probe against ctx.
+`TestWaitForGRPC_UnresponsiveListener` covers it with a black-hole listener and is itself
+bounded, so a regression fails the test instead of stalling the suite.
+
+### 3. Same unbounded dial in `grpcclient` — NOT yet fixed
+
+`grpcclient.NewClient` (`internal/argocd/grpcclient/client.go:51,77`) calls
+`apiclient.NewClient` twice, plus `NewSessionClient()`, all unbounded, and its callers
+(`cmd/sikifanso/middleware.go:70`, `cluster_create.go:111`, `internal/mcp/argocd.go:30`,
+`internal/mcp/doctor.go:70,91`) pass a context with no deadline. Observed during
+acceptance testing: `app status argocd` run seconds after `cluster start`, while
+argocd-server was still coming up, hung for **10 minutes** with no output before being
+killed; it returned in 0.69 s once the pod settled. Every `app`/`agent`/MCP command uses
+this path. Needs a dial deadline inside `NewClient` (a `dialTimeout` var mirroring
+`grpcReadyTimeout`), not just a ctx race, since no caller supplies a deadline.
