@@ -285,3 +285,37 @@ func TestMergeValuesDoesNotMutateBase(t *testing.T) {
 		t.Error("MergeValues mutated the base map")
 	}
 }
+
+// TestArgoCDRuntimeOverridesUsesOnlyRealChartKeys guards against reintroducing
+// Helm values the argo-cd chart does not define. Helm silently drops unknown
+// keys, so a typo or invented path fails open: the value never reaches the
+// rendered manifests and the breakage only shows up at runtime.
+//
+// This is a regression test for the phantom `server.serviceGrpc` override,
+// which the chart has never had (checked 7.7.5 through 10.2.1). It produced a
+// NodePort nothing ever listened on, and `cluster create` hung dialling it.
+func TestArgoCDRuntimeOverridesUsesOnlyRealChartKeys(t *testing.T) {
+	t.Parallel()
+
+	overrides := ArgoCDRuntimeOverrides(NodePortConfig{ArgoCDUI: 30080})
+
+	server, ok := overrides["server"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("overrides[server] is %T, want map", overrides["server"])
+	}
+
+	// The chart exposes the server NodePort as server.service.nodePortHttp.
+	// There is no server.serviceGrpc: ArgoCD multiplexes gRPC and REST on the
+	// same port, so the UI NodePort already serves gRPC.
+	if _, bad := server["serviceGrpc"]; bad {
+		t.Error("server.serviceGrpc is not a chart key; Helm drops it silently")
+	}
+
+	svc, ok := server["service"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("overrides[server][service] is %T, want map", server["service"])
+	}
+	if got := svc["nodePortHttp"]; got != 30080 {
+		t.Errorf("nodePortHttp = %v, want 30080", got)
+	}
+}

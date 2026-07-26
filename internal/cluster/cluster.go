@@ -100,7 +100,6 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 			{Port: fmt.Sprintf("%d:%d", hp.HTTP, np.HTTP), NodeFilters: []string{"server:*"}},
 			{Port: fmt.Sprintf("%d:%d", hp.HTTPS, np.HTTPS), NodeFilters: []string{"server:*"}},
 			{Port: fmt.Sprintf("%d:%d", hp.ArgoCDUI, np.ArgoCDUI), NodeFilters: []string{"server:*"}},
-			{Port: fmt.Sprintf("%d:%d", hp.ArgoCDGRPC, np.ArgoCDGRPC), NodeFilters: []string{"server:*"}},
 			{Port: fmt.Sprintf("%d:%d", hp.HubbleUI, np.HubbleUI), NodeFilters: []string{"server:*"}},
 		},
 		Volumes: []conf.VolumeWithNodeFilters{
@@ -175,8 +174,9 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 		GitOpsPath:       gitopsDir,
 		Services: session.ServiceInfo{
 			ArgoCD: session.ArgoCDInfo{
-				URL:          fmt.Sprintf("http://localhost:%d", hp.ArgoCDUI),
-				GRPCAddress:  fmt.Sprintf("localhost:%d", hp.ArgoCDGRPC),
+				URL: fmt.Sprintf("http://localhost:%d", hp.ArgoCDUI),
+				// Same port as the UI: ArgoCD multiplexes gRPC and REST.
+				GRPCAddress:  fmt.Sprintf("localhost:%d", hp.ArgoCDUI),
 				Username:     "admin",
 				Password:     argocdResult.AdminPassword,
 				ChartVersion: argocdResult.ChartVersion,
@@ -227,7 +227,7 @@ func installInfra(ctx context.Context, log *zap.Logger, restCfg *rest.Config, na
 	// Wait for ArgoCD gRPC to be fully ready before creating Application CRDs.
 	// Deployment readiness probes pass before the gRPC listener and admission
 	// webhook are initialised, causing intermittent CreateApplications failures.
-	grpcAddr := fmt.Sprintf("localhost:%d", hp.ArgoCDGRPC)
+	grpcAddr := fmt.Sprintf("localhost:%d", hp.ArgoCDUI)
 	if err := argocd.WaitForGRPC(ctx, log, grpcAddr); err != nil {
 		return nil, fmt.Errorf("waiting for argocd gRPC: %w", err)
 	}

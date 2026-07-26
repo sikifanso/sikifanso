@@ -89,15 +89,32 @@ func TestAllAvailableWithBoundPort(t *testing.T) {
 	}
 }
 
-func TestDefaultPortsIncludeArgoCDGRPC(t *testing.T) {
+// TestDefaultPortsAreDistinct guards the all-or-nothing allocation: every host
+// port must be usable simultaneously, so no two may collide.
+//
+// There is deliberately no separate ArgoCD gRPC port. ArgoCD multiplexes gRPC
+// and REST on the server's single HTTP port, so ArgoCDUI carries both. An
+// earlier revision reserved a sixth port (30084) and mapped it to a NodePort no
+// service ever claimed, which made `cluster create` hang dialling gRPC.
+func TestDefaultPortsAreDistinct(t *testing.T) {
 	t.Parallel()
-	if defaultPorts.ArgoCDGRPC == 0 {
-		t.Fatal("defaultPorts.ArgoCDGRPC is zero; expected a non-zero port")
+	ports := map[string]int{
+		"APIServer": defaultPorts.APIServer,
+		"HTTP":      defaultPorts.HTTP,
+		"HTTPS":     defaultPorts.HTTPS,
+		"ArgoCDUI":  defaultPorts.ArgoCDUI,
+		"HubbleUI":  defaultPorts.HubbleUI,
 	}
-	if defaultPorts.ArgoCDGRPC == defaultPorts.ArgoCDUI {
-		t.Errorf("ArgoCDGRPC (%d) must differ from ArgoCDUI (%d)", defaultPorts.ArgoCDGRPC, defaultPorts.ArgoCDUI)
-	}
-	if defaultPorts.ArgoCDGRPC == defaultPorts.HubbleUI {
-		t.Errorf("ArgoCDGRPC (%d) must differ from HubbleUI (%d)", defaultPorts.ArgoCDGRPC, defaultPorts.HubbleUI)
+
+	seen := make(map[int]string, len(ports))
+	for name, p := range ports {
+		if p == 0 {
+			t.Errorf("defaultPorts.%s is zero; expected a non-zero port", name)
+			continue
+		}
+		if prev, dup := seen[p]; dup {
+			t.Errorf("defaultPorts.%s and defaultPorts.%s share port %d", prev, name, p)
+		}
+		seen[p] = name
 	}
 }

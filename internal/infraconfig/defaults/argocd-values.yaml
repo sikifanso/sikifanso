@@ -11,9 +11,8 @@ server:
       memory: 512Mi
   ingress:
     enabled: false
+  # Serves both the UI/REST API and gRPC — ArgoCD multiplexes them on one port.
   service:
-    type: NodePort
-  serviceGrpc:
     type: NodePort
 
 repoServer:
