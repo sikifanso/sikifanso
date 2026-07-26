@@ -79,6 +79,11 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 	// See: https://github.com/k3d-io/k3d/issues/1515
 	_ = os.Setenv("K3D_FIX_DNS", "0")
 
+	// The scaffold above deleted and recreated gitopsDir. On Docker Desktop that
+	// leaves the VM serving stale virtiofs dentries for it, which breaks the bind
+	// mount k3d is about to make. Heal the cache before creating the cluster.
+	prewarmGitOpsMount(ctx, log, gitopsDir, cfg.Platform.K3sImage)
+
 	log.Info("creating k3d cluster", zap.String("cluster", name))
 
 	np := cfg.Platform.NodePorts
