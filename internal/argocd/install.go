@@ -156,21 +156,55 @@ func WaitForGRPC(ctx context.Context, log *zap.Logger, addr string) error {
 
 	log.Info("waiting for ArgoCD gRPC server", zap.String("addr", addr))
 
-	client, err := apiclient.NewClient(&apiclient.ClientOptions{
-		ServerAddr: addr,
-		Insecure:   true,
-		PlainText:  true,
-	})
-	if err != nil {
-		return fmt.Errorf("creating ArgoCD probe client: %w", err)
+	// apiclient.NewClient is not the cheap constructor it looks like: it eagerly
+	// probes the Version endpoint to decide whether gRPC-web is needed, and that
+	// probe hardcodes context.Background() upstream (NewVersionClient → newConn →
+	// waitForReady). A refused connection fails fast, but an address that accepts
+	// TCP and never completes the HTTP/2 handshake — a k3d host port mapped to a
+	// NodePort no service claims, say — blocks it forever. Race it against ctx so
+	// grpcReadyTimeout is honoured; a stuck goroutine dies with the process.
+	type clientResult struct {
+		client apiclient.Client
+		err    error
+	}
+	created := make(chan clientResult, 1)
+	go func() {
+		c, err := apiclient.NewClient(&apiclient.ClientOptions{
+			ServerAddr: addr,
+			Insecure:   true,
+			PlainText:  true,
+		})
+		created <- clientResult{client: c, err: err}
+	}()
+
+	var client apiclient.Client
+	select {
+	case res := <-created:
+		if res.err != nil {
+			return fmt.Errorf("creating ArgoCD probe client: %w", res.err)
+		}
+		client = res.client
+	case <-ctx.Done():
+		return fmt.Errorf("timed out waiting for ArgoCD gRPC at %s", addr)
 	}
 
 	for {
-		if err := probeVersion(ctx, client); err == nil {
-			log.Info("ArgoCD gRPC server is ready")
-			return nil
-		} else {
+		// probeVersion can block past ctx: NewVersionClient dials without taking
+		// a context, so an address that accepts TCP but never completes the HTTP/2
+		// handshake (a k3d port mapped to an unclaimed NodePort, say) would hang
+		// forever. Race each probe against ctx so the timeout is always honoured.
+		result := make(chan error, 1)
+		go func() { result <- probeVersion(ctx, client) }()
+
+		select {
+		case err := <-result:
+			if err == nil {
+				log.Info("ArgoCD gRPC server is ready")
+				return nil
+			}
 			log.Debug("ArgoCD gRPC probe failed, retrying", zap.Error(err))
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for ArgoCD gRPC at %s", addr)
 		}
 
 		select {

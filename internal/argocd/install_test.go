@@ -63,6 +63,54 @@ func TestWaitForGRPC_Timeout(t *testing.T) {
 	}
 }
 
+// TestWaitForGRPC_UnresponsiveListener covers the failure mode that a refused
+// connection does not: a listener that completes the TCP handshake and then
+// says nothing. This is what k3d's load balancer does when a host port is
+// mapped to a NodePort no service claims — the dial appears to succeed and the
+// gRPC handshake never finishes. WaitForGRPC must still honour its timeout
+// rather than hang, so the caller gets a diagnosable error.
+func TestWaitForGRPC_UnresponsiveListener(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer func() { _ = lis.Close() }()
+
+	// Accept connections and hold them open without ever writing a byte.
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		for {
+			conn, err := lis.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				<-done
+				_ = conn.Close()
+			}()
+		}
+	}()
+
+	origTimeout := grpcReadyTimeout
+	grpcReadyTimeout = 2 * time.Second
+	defer func() { grpcReadyTimeout = origTimeout }()
+
+	// Bound the test itself: on a regression this call hangs indefinitely, and
+	// a plain blocking call would stall the whole suite until the panic timeout.
+	returned := make(chan error, 1)
+	go func() { returned <- WaitForGRPC(context.Background(), zaptest.NewLogger(t), lis.Addr().String()) }()
+
+	select {
+	case err := <-returned:
+		if err == nil {
+			t.Fatal("WaitForGRPC succeeded against an unresponsive listener")
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("WaitForGRPC hung past its timeout against an unresponsive listener")
+	}
+}
+
 func TestWaitForGRPC_DelayedStart(t *testing.T) {
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
