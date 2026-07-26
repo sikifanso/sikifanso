@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -39,9 +40,48 @@ type Client struct {
 	log       *zap.Logger
 }
 
+// dialTimeout bounds the whole connect-and-authenticate sequence.
+//
+// The upstream apiclient does not honour our context for dialling:
+// apiclient.NewClient eagerly probes the Version endpoint to decide whether
+// gRPC-web is needed, and NewSessionClient dials — both on a hardcoded
+// context.Background() (newConn → waitForReady → WaitForStateChange). A refused
+// connection fails fast, but an address that accepts TCP and never completes the
+// HTTP/2 handshake blocks forever; that is exactly what k3d's load balancer looks
+// like while ArgoCD is still starting. No caller supplies a deadline, so the
+// bound has to live here.
+var dialTimeout = 30 * time.Second
+
 // NewClient connects to ArgoCD over gRPC, authenticates with the given
-// credentials, and returns an authenticated Client.
+// credentials, and returns an authenticated Client. It gives up after
+// dialTimeout rather than blocking indefinitely on an unreachable server.
 func NewClient(ctx context.Context, opts Options) (*Client, error) {
+	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
+	defer cancel()
+
+	type result struct {
+		client *Client
+		err    error
+	}
+	done := make(chan result, 1)
+	go func() {
+		c, err := connect(ctx, opts)
+		done <- result{client: c, err: err}
+	}()
+
+	select {
+	case res := <-done:
+		return res.client, res.err
+	case <-ctx.Done():
+		// The goroutine may still be wedged inside the upstream dial; it is
+		// abandoned and dies with the process.
+		return nil, fmt.Errorf("timed out connecting to ArgoCD gRPC at %s after %s", opts.Address, dialTimeout)
+	}
+}
+
+// connect performs the blocking connect-and-authenticate sequence. It must be
+// called under a bound — see NewClient.
+func connect(ctx context.Context, opts Options) (*Client, error) {
 	baseOpts := &apiclient.ClientOptions{
 		ServerAddr: opts.Address,
 		Insecure:   true,
