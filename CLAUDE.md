@@ -19,7 +19,7 @@ make snapshot       # goreleaser build --snapshot --clean
 go test ./internal/catalog/ -run TestFind -race
 ```
 
-Go 1.25. Module path is `github.com/alicanalbayrak/sikifanso` (the GitHub remote is `sikifanso/sikifanso` — the module path intentionally differs). CI runs golangci-lint → `go build ./...` → `go test ./... -race`.
+Go 1.26. Module path is `github.com/alicanalbayrak/sikifanso` (the GitHub remote is `sikifanso/sikifanso` — the module path intentionally differs). CI runs golangci-lint → `go build ./...` → `go test ./... -race`.
 
 Note: the checked-in `.mcp.json` runs `sikifanso` from PATH — refresh the MCP server binary with `go install ./cmd/sikifanso` (or an installed release on PATH).
 
@@ -45,7 +45,7 @@ Note: the checked-in `.mcp.json` runs `sikifanso` from PATH — refresh the MCP 
 
 **ArgoCD sync — two mechanisms** (`internal/argocd/`):
 - `appsetreconcile` — patches the `application-set-refresh` annotation on an ApplicationSet CR to force immediate reconciliation. Used when Application CRs must appear/disappear (enable/disable, agent ops, MCP, dashboard).
-- `grpcsync` — orchestrator over the ArgoCD gRPC API (`grpcclient` wraps `argo-cd/v2/pkg/apiclient`). Watches per-app with poll fallback, 60s Degraded grace period, and tier sequencing: tiers sort lexically (`0-operators` < `1-data`), reversed on disable; falls back silently to concurrent sync if no requested app has a tier.
+- `grpcsync` — orchestrator over the ArgoCD gRPC API (`grpcclient` wraps `argo-cd/v3/pkg/apiclient`). Watches per-app with poll fallback, 60s Degraded grace period, and tier sequencing: tiers sort lexically (`0-operators` < `1-data`), reversed on disable; falls back silently to concurrent sync if no requested app has a tier.
 - Enable vs Sync matters: after enabling, Application CRs don't exist yet, so the flow must use `OpEnable` (annotate → poll for CR → watch), not `OpSync` (see comment in `cluster_create.go`).
 
 **GitOps is local**: no remote git server. ArgoCD's repo-server reads `/local-gitops` directly (configured in `internal/infraconfig/defaults/argocd-values.yaml`). Changes become visible to ArgoCD only via `gitops.Commit` (go-git, `internal/gitops/`). `catalog.SetEnabled` writes the file but **never commits** — callers (`catalog.Toggle`, `profile.Apply`, TUI) must commit themselves.

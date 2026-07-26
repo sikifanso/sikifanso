@@ -1,8 +1,10 @@
 # Migrate the argo-cd Go module v2 → v3
 
 **Date:** 2026-07-26
-**Status:** Draft
+**Status:** Implemented
 **Issue:** sikifanso/sikifanso#52
+**Branch:** `design/issue-52-argocd-v3`
+**Approved:** 2026-07-26, by the `/implement-design 52` invocation that carried out this work.
 
 ## Problem
 
@@ -234,6 +236,10 @@ and healthy today).
 
 ### E. renovate.json
 
+> **Superseded in part — see Deviation 1.** The kubernetes-group cap design below was
+> not implemented; the group is held with `dependencyDashboardApproval` and no
+> `allowedVersions`. The rest of this section landed as written.
+
 Replace the single kubernetes rule (`renovate.json:25-34`) with three rules sharing
 `"groupName": "kubernetes"` (one PR, per-package caps — `allowedVersions` is
 per-rule, and structured-merge-diff's v6.x would violate a shared `<0.35` cap):
@@ -321,23 +327,66 @@ time). Contract tests are unaffected: no command-tree or MCP-tool-list changes.
     close it and let the next scheduled run open a capped one); PR #48 (helm v4) stays —
     it is a separate module-path migration, explicitly out of scope here.
 
+## Deviations
+
+1. **Design E (renovate.json kubernetes group) — changed by user decision.** The spec
+   proposed splitting the group into three rules carrying `allowedVersions` caps
+   (`<0.35.0` / `<3.20.0`); Risk #1 flagged the cap style as an open question. The user
+   chose `dependencyDashboardApproval` on the existing single grouped rule instead, with
+   no caps, on the stated goal of keeping the app safe *while still seeing that updates
+   exist*. The deciding fact: `allowedVersions` is a lookup-time filter, so capped
+   versions never become update objects and vanish from the Dependency Dashboard
+   entirely — safety by invisibility. The approval gate provides the same protection
+   while leaving k8s 0.36.x / helm 3.21.x visible, and the rule description now names the
+   real ceiling (0.34.x / 3.19.x) and the reason at the point of decision.
+   The rest of Design E (argo-cd rule retarget + all-updates hold, new
+   `argo-cd/gitops-engine` disable rule, comment-only updates) landed as specified.
+
+2. **`toAppStatus` carries an explanatory comment.** Design C.1 said only "drop the
+   `Message:` field initializer". A three-line comment was added recording *why* the
+   field is deliberately left unset, so the absence doesn't read as an oversight to the
+   next reader.
+
+3. **Incidental MVS floor raises**, not mentioned in the spec: `fatih/color`
+   1.16.0→1.18.0, `sirupsen/logrus` 1.9.3→1.9.4, `golang.org/x/term` 0.39.0→0.44.0,
+   `google.golang.org/grpc` 1.78.0→1.79.3. Verified via `go mod graph` that each is a
+   floor required by argo-cd v3.4.5 and/or helm 3.19.5 — forced, not opportunistic.
+
+4. **`go list -m all` is unusable in this repo, so the Test-plan check for the departed
+   old-path module was run differently.** It fails on `k8s.io/kubernetes`'s v0.0.0
+   staging deps (`k8s.io/cloud-provider@v0.0.0: invalid version` and ~13 more). Confirmed
+   pre-existing, not a regression: an identical run in a `git worktree` at pristine HEAD
+   fails the same way — and it is the exact condition `renovate.json`'s `k8s.io/kubernetes`
+   disable rule already documents. Substituted
+   `go list -m github.com/argoproj/gitops-engine`, which answers the question directly:
+   `module github.com/argoproj/gitops-engine: not a known dependency`. Also confirmed
+   absent from both `go.mod` and `go.sum`.
+
 ## Test plan
 
-Verifiable in a session (no Docker):
+Verifiable in a session (no Docker) — **all executed, all pass:**
 
-- `make build`, `make test`, `make lint` — all green (dry-run evidence: build and tests
-  pass with zero source changes; lint is clean once the two Design-C fixes are in).
-- `go list -m` selections match Design A's table; old-path
-  `github.com/argoproj/gitops-engine` absent from `go list -m all`.
-- Contract tests `cmd/sikifanso/command_structure_test.go` and
-  `internal/mcp/server_test.go` pass unmodified (nothing in this change touches either
-  surface).
-- Pinned `renovate-config-validator` passes on the new config.
-- `install_test.go`'s fake gRPC server (`TestWaitForGRPC_*`) exercises the v3 client
-  against a live in-process gRPC listener — this is real wire-level coverage of the
-  migrated apiclient, not just compilation.
+- ✅ `make build` (exit 0), `make test` (exit 0 — 17 packages `ok` under `-race`,
+  0 failures), `make lint` (exit 0 — golangci-lint "0 issues", confirming both
+  Design-C SA1019 fixes landed).
+- ✅ `go list -m` selections match Design A exactly: `argo-cd/v3 v3.4.5`,
+  `k8s.io/{api,apimachinery,client-go} v0.34.2`, `helm.sh/helm/v3 v3.19.5`,
+  `sigs.k8s.io/structured-merge-diff/v6 v6.3.2`, `go-git/v5 v5.14.0`.
+- ✅ Old-path `github.com/argoproj/gitops-engine` gone from the module graph
+  (see Deviation 4 for the substituted command).
+- ✅ Contract tests `cmd/sikifanso/command_structure_test.go` and
+  `internal/mcp/server_test.go` pass **unmodified** — neither the command tree nor the
+  25-tool list was touched.
+- ✅ `npx --yes --package renovate@41.140.1 -c 'renovate-config-validator renovate.json'`
+  → "Config validated successfully".
+- ✅ `install_test.go`'s `TestWaitForGRPC_*` drives the migrated v3 apiclient against a
+  live in-process gRPC listener — real wire-level coverage, not just compilation.
+- ✅ Finding 3's landmine confirmed handled: `go get` resolved cleanly *with* the
+  replace in place, where the spec predicted a bare `go get` would fail outright.
 
-Needs a real Docker/k3d run on the user's machine (issue acceptance criteria):
+**Manual verification pending** — needs a real Docker/k3d run on the user's machine
+(issue acceptance criteria). None of the following were executed in the implementation
+session; none may be treated as verified:
 
 - `sikifanso cluster create` → ArgoCD v3.4.5 installs, `WaitForGRPC` succeeds, infra
   apps reach Healthy (exercises apiclient + session auth + watch streaming + tier
