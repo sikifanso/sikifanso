@@ -475,7 +475,7 @@ a 12 s context). Fix: race both client construction and each probe against ctx.
 `TestWaitForGRPC_UnresponsiveListener` covers it with a black-hole listener and is itself
 bounded, so a regression fails the test instead of stalling the suite.
 
-### 3. Same unbounded dial in `grpcclient` — NOT yet fixed
+### 3. Same unbounded dial in `grpcclient` — fixed
 
 `grpcclient.NewClient` (`internal/argocd/grpcclient/client.go:51,77`) calls
 `apiclient.NewClient` twice, plus `NewSessionClient()`, all unbounded, and its callers
@@ -484,5 +484,35 @@ bounded, so a regression fails the test instead of stalling the suite.
 acceptance testing: `app status argocd` run seconds after `cluster start`, while
 argocd-server was still coming up, hung for **10 minutes** with no output before being
 killed; it returned in 0.69 s once the pod settled. Every `app`/`agent`/MCP command uses
-this path. Needs a dial deadline inside `NewClient` (a `dialTimeout` var mirroring
-`grpcReadyTimeout`), not just a ctx race, since no caller supplies a deadline.
+this path. Because no caller supplies a deadline, a ctx race alone would not help — the
+bound has to live in `NewClient`. Fixed with a `dialTimeout` var (mirroring
+`grpcReadyTimeout`): the blocking sequence moved into `connect()` and raced against it, so
+an unreachable server reports `timed out connecting to ArgoCD gRPC at <addr> after 30s`.
+Covered by `TestNewClient_UnresponsiveListener` (black-hole listener, itself bounded;
+returns in 2.00 s against a 2 s timeout).
+
+### 4. Docker Desktop virtiofs dentry cache broke back-to-back cluster creates — fixed
+
+Creating a cluster within an hour of a previous one failed reproducibly (observed twice,
+10:51 and 10:59) with `error while creating mount source path '/host_mnt/.../gitops'`,
+surfacing as an opaque `node k3d-default-server-0 failed to get ready … status=restarting`.
+
+Root cause is in Docker Desktop, not this repo, but it is triggered deterministically by
+the create flow. Docker Desktop shares `/Users` into its VM over virtiofs with
+`entry_timeout=3600,attr_timeout=3600`, and nothing invalidates the guest dentry cache
+when the host unlinks a path. `cluster create` deletes and re-scaffolds the gitops dir, so
+the VM serves the previous cluster's cached, deleted dentries for up to an hour. k3d then
+copies its entrypoint scripts into the *created-but-not-started* server container, and the
+daemon's copy-to-stopped-container path resolves bind sources through that stale cache —
+whereas `docker start` resolves them host-side and succeeds. The container therefore starts
+without its entrypoint and crash-loops (`exec /bin/k3d-entrypoint.sh failed`). This also
+explains why ad-hoc `docker run -v` probes of the same path all succeeded: the start path
+heals the cache.
+
+Fix (`internal/cluster/prewarm.go`): start a throwaway container with the same bind after
+scaffolding and before `ClusterRun`, which heals the cache. Reuses the already-present k3s
+image and never pulls; skipped on native Linux; best-effort with debug-only logging, since
+a genuine mount failure surfaces moments later in `ClusterRun` with a better message.
+Verified: the delete-then-create cycle that failed twice now completes, with all three
+`WriteFileAction` preStart hooks executing cleanly. Worth reporting upstream to Docker
+Desktop.
