@@ -564,3 +564,49 @@ Harmless at runtime (see risk 4 above — callers resolve the gRPC host from
 `Services.ArgoCD.URL`), but actively misleading to anyone reading the session format or that
 test. Removed: the field, its write, and `TestSessionRoundTrip_GRPCAddress`. Backward-compatible
 for existing sessions, which simply carry an ignored key.
+
+## Acceptance re-run on the final HEAD (2026-08-08)
+
+The results recorded earlier in this spec predate two commits — `0514953` (grpcclient dial
+timeout) and `31b5dcc` (virtiofs prewarm) — both of which touch the create/connect path that
+run was exercising. Re-run in full against `bin/sikifanso` built from the final branch HEAD.
+Not via the MCP tools: `.mcp.json` resolves `sikifanso` from `PATH` to a Homebrew v0.9.1
+release, so an MCP-driven run would have exercised the pre-migration binary.
+
+| # | Step | Result |
+|---|------|--------|
+| 1 | `cluster create -c v3check` | exit 0 |
+| 2 | `app status argocd` right after create | **0.76 s** |
+| 3 | `app enable postgresql` | exit 0, 88.6 s |
+| 4 | `cluster doctor` | 8/8 checks ok |
+| 5 | `cluster stop` → `cluster start` | exit 0 / exit 0 |
+| 6 | `app status argocd` right after start | **failed — 30 s timeout** (see below) |
+| 7 | `cluster delete` → immediate `cluster create` | exit 0 / exit 0, 1 m 40 s |
+| 8 | `cluster delete` | exit 0, no containers left |
+
+Step 3 confirms the dependency cascade and tier sequencing: `postgresql` auto-enabled
+`cnpg-operator` and `prometheus-stack`, and the sync watched tier `0-operators` to completion
+(14:09:28 → 14:10:27) before starting `1-data`. All three reached Synced/Healthy.
+
+Step 7 confirms defect 4 is fixed — the delete-then-create cycle that previously failed
+reproducibly now completes with no `error while creating mount source path`.
+
+### Step 6: `cluster start` does not wait for ArgoCD
+
+`app status argocd` run immediately after `cluster start` fails at exactly the dial timeout:
+
+```
+Error: timed out connecting to ArgoCD gRPC at localhost:56415 after 30s
+```
+
+Retried ~15 s later it returns in 0.70 s. So this is the defect-3 fix behaving exactly as
+designed — the 10-minute hang is gone — but the underlying gap is untouched: `cluster.Start`
+calls `k3dclient.ClusterStart` with `WaitForServer: true`, which waits for the **k3s API
+server**, not for ArgoCD. `cluster.Create` calls `argocd.WaitForGRPC` before returning;
+`Start` never has, on this branch or on `main`. `cluster start` therefore reports success
+while the next command cannot yet connect.
+
+Pre-existing and independent of this migration, which strictly improved the symptom (silent
+10-minute hang → bounded 30 s error with a clear message). Tracked separately; the obvious fix
+is for `Start` to call `WaitForGRPC` the way `Create` does. Related to #54 (hardcoded
+provisioning wait timeouts).
