@@ -293,6 +293,29 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
 )
 
+// k8s.io/kubernetes declares its staging modules as v0.0.0 and resolves them with
+// replace directives in its own go.mod, which consumers do not inherit. We reach it
+// indirectly via argo-cd. Nothing here is compiled — module graph pruning never
+// resolves these — but any command that enumerates the full graph (`go list -m all`,
+// which is what IDE project sync runs) fails without them. Keep these on the same
+// version as the rest of the k8s.io family.
+replace (
+	k8s.io/cloud-provider => k8s.io/cloud-provider v0.34.2
+	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.34.2
+	k8s.io/cri-client => k8s.io/cri-client v0.34.2
+	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.34.2
+	k8s.io/dynamic-resource-allocation => k8s.io/dynamic-resource-allocation v0.34.2
+	k8s.io/endpointslice => k8s.io/endpointslice v0.34.2
+	k8s.io/externaljwt => k8s.io/externaljwt v0.34.2
+	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.34.2
+	k8s.io/kube-proxy => k8s.io/kube-proxy v0.34.2
+	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.34.2
+	k8s.io/kubelet => k8s.io/kubelet v0.34.2
+	k8s.io/mount-utils => k8s.io/mount-utils v0.34.2
+	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.34.2
+	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.34.2
+)
+
 // argo-cd v3.3+ vendors gitops-engine as an untagged nested module and pins it with a
 // local-path replace that consumers don't inherit; the pseudo-version argo-cd requires
 // does not resolve on the module proxy. Pin the nested module at the argo-cd release
