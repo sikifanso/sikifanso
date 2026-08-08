@@ -179,9 +179,9 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 		GitOpsPath:       gitopsDir,
 		Services: session.ServiceInfo{
 			ArgoCD: session.ArgoCDInfo{
-				URL: fmt.Sprintf("http://localhost:%d", hp.ArgoCDUI),
-				// Same port as the UI: ArgoCD multiplexes gRPC and REST.
-				GRPCAddress:  fmt.Sprintf("localhost:%d", hp.ArgoCDUI),
+				// gRPC and REST share this port: ArgoCD multiplexes them, and
+				// grpcclient derives the gRPC host from this URL.
+				URL:          fmt.Sprintf("http://localhost:%d", hp.ArgoCDUI),
 				Username:     "admin",
 				Password:     argocdResult.AdminPassword,
 				ChartVersion: argocdResult.ChartVersion,

@@ -31,7 +31,6 @@ type ServiceInfo struct {
 // ArgoCDInfo holds ArgoCD access details.
 type ArgoCDInfo struct {
 	URL          string `json:"url"`
-	GRPCAddress  string `json:"grpcAddress,omitempty"`
 	Username     string `json:"username"`
 	Password     string `json:"password"`
 	ChartVersion string `json:"chartVersion"`
