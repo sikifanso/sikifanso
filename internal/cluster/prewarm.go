@@ -49,21 +49,33 @@ func prewarmGitOpsMount(ctx context.Context, log *zap.Logger, gitopsDir, k3sImag
 	}
 	defer func() { _ = docker.Close() }()
 
-	// Reuse the k3s image rather than pulling anything. If it is not present the
-	// cache cannot be stale for this path either: staleness requires an earlier
-	// cluster to have mounted it, which would have left the image behind.
-	images, err := docker.ImageList(ctx, image.ListOptions{
-		Filters: filters.NewArgs(filters.Arg("reference", k3sImage)),
-	})
-	if err != nil || len(images) == 0 {
-		log.Debug("mount prewarm skipped: k3s image not present locally",
-			zap.String("image", k3sImage), zap.Error(err))
-		return
+	// Any locally-present image will do — the heal comes from *starting a container
+	// with this bind*, not from what runs inside it. Prefer the k3s image since it
+	// is normally already here, but fall back to whatever else is, and never pull.
+	//
+	// The fallback is not hypothetical. Tying this to the k3s image assumed that an
+	// absent image implies a cache that cannot be stale — but staleness depends on an
+	// earlier cluster having mounted *this gitops path*, not on which image it ran.
+	// A k3s image bump breaks exactly that assumption: the previous cluster left the
+	// path cached under the *old* image, the new tag is not present yet, and prewarm
+	// would skip precisely when it is needed. Observed on the v1.29.1 → v1.36.3 bump,
+	// where the first create failed with the very error this function prevents.
+	prewarmImage := k3sImage
+	if !imagePresent(ctx, docker, k3sImage) {
+		local, err := docker.ImageList(ctx, image.ListOptions{})
+		if err != nil || len(local) == 0 || len(local[0].RepoTags) == 0 {
+			log.Debug("mount prewarm skipped: no local image to run",
+				zap.String("k3sImage", k3sImage), zap.Error(err))
+			return
+		}
+		prewarmImage = local[0].RepoTags[0]
+		log.Debug("mount prewarm using fallback image",
+			zap.String("k3sImage", k3sImage), zap.String("using", prewarmImage))
 	}
 
 	created, err := docker.ContainerCreate(ctx,
 		&container.Config{
-			Image:      k3sImage,
+			Image:      prewarmImage,
 			Entrypoint: []string{"/bin/true"},
 		},
 		&container.HostConfig{
@@ -87,4 +99,12 @@ func prewarmGitOpsMount(ctx context.Context, log *zap.Logger, gitopsDir, k3sImag
 	}
 
 	log.Debug("gitops mount prewarmed", zap.String("dir", gitopsDir))
+}
+
+// imagePresent reports whether the image is already in the local daemon.
+func imagePresent(ctx context.Context, docker client.ImageAPIClient, ref string) bool {
+	images, err := docker.ImageList(ctx, image.ListOptions{
+		Filters: filters.NewArgs(filters.Arg("reference", ref)),
+	})
+	return err == nil && len(images) > 0
 }
