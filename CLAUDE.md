@@ -21,7 +21,9 @@ go test ./internal/catalog/ -run TestFind -race
 
 Go 1.26. Module path is `github.com/alicanalbayrak/sikifanso` (the GitHub remote is `sikifanso/sikifanso` — the module path intentionally differs). CI runs golangci-lint → `go build ./...` → `go test ./... -race`.
 
-Note: the checked-in `.mcp.json` runs `sikifanso` from PATH — refresh the MCP server binary with `go install ./cmd/sikifanso` (or an installed release on PATH).
+Note: the checked-in `.mcp.json` runs `./bin/sikifanso`, so `make build` is what refreshes the MCP server — run it after changing anything the MCP tools reach, then restart the server.
+
+It used to run `sikifanso` from PATH, which silently served whatever release happened to be installed: on a machine with a Homebrew build on PATH the MCP tools drove that binary, not the working tree, with no error to say so. `go install ./cmd/sikifanso` does not fix that unless `$(go env GOPATH)/bin` precedes the release on your PATH — check with `which -a sikifanso` before trusting it.
 
 ## Architecture
 

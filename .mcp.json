@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "sikifanso": {
-      "command": "sikifanso",
+      "command": "./bin/sikifanso",
       "args": ["mcp", "serve", "--log-level", "error"]
     }
   }
