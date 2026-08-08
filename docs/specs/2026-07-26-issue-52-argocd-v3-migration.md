@@ -422,28 +422,61 @@ Original checklist, for the record:
 
 ## Risks & open questions
 
-1. **Renovate cap style** (needs a decision, recommendation: as designed).
-   `allowedVersions` keeps patch-level automation alive inside the safe range; the
-   alternative — `dependencyDashboardApproval` on the kubernetes group — is simpler but
-   turns every k8s/helm patch into a manual step. The caps carry a maintenance duty:
-   every future argo-cd bump that moves its k8s minor must also move both caps (the rule
-   descriptions say so).
-2. **client-go 0.34 vs k3s v1.29.1 skew** (finding 17). Accepted here; landing PR #27
-   (k3s v1.36.2) afterwards brings the pair back within −2. Not this change's scope.
-3. **gitops-engine replace hygiene.** The pin is correct for v3.4.5 by construction,
-   but nothing machine-checks "replace commit == argo-cd tag commit" on future bumps.
-   The go.mod comment + renovate rule descriptions are the guardrail; a doctor check or
-   CI assert was judged over-engineering for a hand-held, dashboard-approved bump path.
-4. **Fresh-cluster-only validation.** Existing clusters created by older CLI builds keep
-   their session state and gitops repo; nothing in this change migrates them, and the
-   `cluster stop/start` path doesn't touch the argo-cd client version. A stale cluster
-   talking to the new CLI simply gets the same gRPC calls from a newer client — the v3
-   server already deployed there accepts both. No migration step needed, but the
-   acceptance run should still include one `cluster stop` → `cluster start` cycle.
+All four are closed. Resolutions below reflect what shipped, not what this spec originally
+proposed — where the two differ, the reversal and its reason are recorded.
+
+1. **Renovate hold style — resolved, reversing this spec's own design.** The design proposed
+   `allowedVersions` caps. **No caps shipped**: every hold is `dependencyDashboardApproval`.
+   `allowedVersions` filters at *lookup* time, so a capped release never becomes an update
+   object and vanishes from the Dependency Dashboard entirely — safety by invisibility, which
+   hides exactly the information the dashboard exists to surface. The approval gate protects
+   the build just as well while leaving newer releases visible; the human decides at the
+   checkbox. The real ceiling and its reason live in each rule's `description`, since that
+   text is what gets read at the moment of deciding.
+
+   The maintenance duty this section previously described — "every future argo-cd bump that
+   moves its k8s minor must also move both caps" — **does not exist**. There are no caps to move.
+
+2. **client-go 0.34.2 vs k3s v1.29.1 skew — accepted, with a sequenced follow-up.** Note this
+   migration *widened* the skew rather than inheriting it: argo-cd v2.14.20 put client-go at
+   0.31.x against k3s 1.29, and v3.4.5 moves it to 0.34.2. That pairing is nonetheless the one
+   the acceptance run actually exercised, which the alternative (landing k3s first) would not be.
+   Merge order is therefore #61 first, then PR #27 (`rancher/k3s` → `v1.36.3-k3s1`) as the
+   immediate next change — not queued behind other work, since main carries the wide skew until
+   it lands.
+
+3. **gitops-engine replace hygiene — resolved, now guarded.** This section previously judged a
+   machine check to be over-engineering, assuming it needed a doctor check or a network call.
+   It needs neither. The go command already records the tag's commit in the module cache, so
+   the invariant is checkable offline: `TestGitopsEnginePinMatchesArgoCDTag`
+   (`internal/argocd/gitopsengine_pin_test.go`) reads the argo-cd/v3 version and the
+   gitops-engine replace out of `go.mod`, then asserts the pinned commit prefixes the
+   `Origin.Hash` recorded for that argo-cd tag. It skips when the proxy did not report
+   `Origin`, and `TestVerifyPinDetectsMismatch` proves it can fail — including against
+   `97ad5b59a627`, the stale placeholder someone would copy from argo-cd's own `require` line.
+
+   Verified for this bump: the replace `v0.0.0-20260709160802-564b94973b28` decodes exactly to
+   the `v3.4.5` tag commit `564b94973b284b8de98da7cee6eeade2cb941e46` (`2026-07-09T16:08:02Z`).
+
+   A doctor check would have been the wrong home regardless: those run against a live cluster,
+   and this is a build-time invariant.
+
+4. **Fresh-cluster-only validation — verified, and the reasoning corrected.** The original
+   argument (the deployed v3 server accepts calls from both client majors) holds, but it
+   missed the sharper question raised by the phantom-port fix: pre-existing sessions were
+   written with a `grpcAddress` pointing at NodePort 30084, which this change deletes.
+
+   That turns out to be harmless, for a reason worth recording: **nothing ever read the stored
+   address.** `grpcClientFromSession` (`cmd/sikifanso/middleware.go`) passes
+   `sess.Services.ArgoCD.URL` to `grpcclient.FromSessionCreds`, which parses the host from it.
+   The field was write-only on this branch and on `main` alike. It has now been removed
+   (below), which is backward-compatible: `session.Load` uses `sigs.k8s.io/yaml` → non-strict
+   `json.Unmarshal`, so existing `session.yaml` files carrying `grpcAddress:` load with the key
+   ignored. No migration step.
 
 ## Follow-up defects found during acceptance testing
 
-Both are independent of the v3 migration (the chart pin, `ports.go` and `platform.yaml`
+All are independent of the v3 migration (the chart pin, `ports.go` and `platform.yaml`
 were untouched by it) and were fixed on this branch with the user's approval.
 
 ### 1. Phantom ArgoCD gRPC NodePort — `cluster create` hung forever
@@ -515,4 +548,19 @@ image and never pulls; skipped on native Linux; best-effort with debug-only logg
 a genuine mount failure surfaces moments later in `ClusterRun` with a better message.
 Verified: the delete-then-create cycle that failed twice now completes, with all three
 `WriteFileAction` preStart hooks executing cleanly. Worth reporting upstream to Docker
-Desktop.
+Desktop — tracked as its own issue so the justification for `prewarm.go` outlives this spec.
+
+## Found during merge-readiness review
+
+### 5. Vestigial `GRPCAddress` — the phantom port's last limb
+
+Defect 1 removed the invented chart key and the phantom port end to end, but left
+`Session.GRPCAddress` behind: written at `internal/cluster/cluster.go`, persisted in
+`session.yaml`, and read by **nothing** — neither on this branch nor on `main`. Its
+round-trip test still asserted `localhost:30084`, so the suite documented the correctness of
+a port the same branch had just proved never existed.
+
+Harmless at runtime (see risk 4 above — callers resolve the gRPC host from
+`Services.ArgoCD.URL`), but actively misleading to anyone reading the session format or that
+test. Removed: the field, its write, and `TestSessionRoundTrip_GRPCAddress`. Backward-compatible
+for existing sessions, which simply carry an ignored key.
