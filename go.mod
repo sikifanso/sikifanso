@@ -299,4 +299,9 @@ require (
 // tag commit instead, and move this line in lockstep with the argo-cd/v3 require —
 // resolve the new version with:
 //   curl https://proxy.golang.org/github.com/argoproj/argo-cd/gitops-engine/@v/<tag-commit-sha>.info
+//
+// Do NOT copy the version from argo-cd's own require line: its monorepo replace
+// (=> ./gitops-engine) neutralises it, so that string is a stale placeholder — for v3.4.5
+// it names a commit ten months older than the tag. TestGitopsEnginePinMatchesArgoCDTag
+// (internal/argocd/) fails if this line and the argo-cd/v3 require drift apart.
 replace github.com/argoproj/argo-cd/gitops-engine => github.com/argoproj/argo-cd/gitops-engine v0.0.0-20260709160802-564b94973b28
