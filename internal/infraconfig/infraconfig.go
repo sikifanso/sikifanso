@@ -18,11 +18,10 @@ type PlatformConfig struct {
 
 // NodePortConfig holds container-side NodePort assignments.
 type NodePortConfig struct {
-	HTTP       int `yaml:"http"`
-	HTTPS      int `yaml:"https"`
-	ArgoCDUI   int `yaml:"argocdUI"`
-	ArgoCDGRPC int `yaml:"argocdGRPC"`
-	HubbleUI   int `yaml:"hubbleUI"`
+	HTTP     int `yaml:"http"`
+	HTTPS    int `yaml:"https"`
+	ArgoCDUI int `yaml:"argocdUI"`
+	HubbleUI int `yaml:"hubbleUI"`
 }
 
 // ChartConfig holds Helm chart coordinates for a component.
@@ -99,11 +98,10 @@ func CiliumRuntimeOverrides(np NodePortConfig, apiServerIP string) map[string]in
 func ArgoCDRuntimeOverrides(np NodePortConfig) map[string]interface{} {
 	return map[string]interface{}{
 		"server": map[string]interface{}{
+			// ArgoCD multiplexes gRPC and REST on the server's HTTP port, so this
+			// single NodePort serves both. The chart has no server.serviceGrpc key.
 			"service": map[string]interface{}{
 				"nodePortHttp": np.ArgoCDUI,
-			},
-			"serviceGrpc": map[string]interface{}{
-				"nodePortGrpc": np.ArgoCDGRPC,
 			},
 		},
 	}

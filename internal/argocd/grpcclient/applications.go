@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	applicationpkg "github.com/argoproj/argo-cd/v2/pkg/apiclient/application"
-	"github.com/argoproj/argo-cd/v2/pkg/apis/application/v1alpha1"
+	applicationpkg "github.com/argoproj/argo-cd/v3/pkg/apiclient/application"
+	"github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/apimachinery/pkg/watch"
@@ -60,11 +60,13 @@ func (c *Client) GetApplication(ctx context.Context, name string) (*AppDetail, e
 
 // toAppStatus converts an ArgoCD Application to the domain AppStatus type.
 func toAppStatus(app v1alpha1.Application) AppStatus {
+	// Message is intentionally left unset: app-level Health.Message is deprecated
+	// upstream and never populated by the v3 controller. Per-resource messages still
+	// come through ResourceStatus.Message below.
 	return AppStatus{
 		Name:       app.Name,
 		SyncStatus: string(app.Status.Sync.Status),
 		Health:     string(app.Status.Health.Status),
-		Message:    app.Status.Health.Message,
 	}
 }
 
@@ -305,7 +307,7 @@ func (c *Client) RunResourceAction(ctx context.Context, appName string, ref Reso
 	}
 	defer func() { _ = closer.Close() }()
 
-	_, err = client.RunResourceAction(ctx, &applicationpkg.ResourceActionRunRequest{
+	_, err = client.RunResourceActionV2(ctx, &applicationpkg.ResourceActionRunRequestV2{
 		Name:         &appName,
 		Namespace:    &ref.Namespace,
 		ResourceName: &ref.Name,

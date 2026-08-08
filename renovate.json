@@ -23,14 +23,15 @@
       "matchUpdateTypes": ["minor", "patch", "digest", "pin"]
     },
     {
-      "description": "k8s libs and the Helm SDK are version-locked to argo-cd v2.14; they must move as one PR",
+      "description": "k8s libs and the Helm SDK are version-locked to argo-cd v3.4: k8s 0.34.x and its partner helm 3.19.x (helm 3.N pairs with k8s 0.(N+15)). Do NOT approve past those minors until argo-cd moves its own k8s minor — 0.35+ removes API packages (autoscaling/v2beta1, autoscaling/v2beta2, scheduling/v1alpha1) that argo-cd's k8s.io/kubernetes internals still import; verified locally that 0.36.3 + helm 3.21.3 does not build. Held behind the dashboard rather than capped with allowedVersions so newer releases stay visible instead of being filtered out of lookup.",
       "groupName": "kubernetes",
       "matchManagers": ["gomod"],
       "matchPackageNames": [
         "k8s.io/**",
         "helm.sh/helm/v3",
         "sigs.k8s.io/structured-merge-diff/**"
-      ]
+      ],
+      "dependencyDashboardApproval": true
     },
     {
       "description": "Publishes its staging deps as v0.0.0; bot PRs are unresolvable without replace directives",
@@ -38,9 +39,13 @@
       "enabled": false
     },
     {
-      "description": "argo-cd v2 to v3 is a module-path migration across 6 files, not a bump",
-      "matchPackageNames": ["github.com/argoproj/argo-cd/v2"],
-      "matchUpdateTypes": ["major"],
+      "description": "The argo-cd client must track the deployed server (chart pin in internal/infraconfig/defaults/argocd.yaml), so every bump is a hand-held change: move the chart together with it, repoint the go.mod gitops-engine replace at the new release tag commit, and re-check the kubernetes group above if argo-cd's k8s minor moved. Majors additionally rewrite import paths across 6 files.",
+      "matchPackageNames": ["github.com/argoproj/argo-cd/v3"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Replace-pinned in go.mod to the argo-cd release tag commit; must never move independently of github.com/argoproj/argo-cd/v3",
+      "matchPackageNames": ["github.com/argoproj/argo-cd/gitops-engine"],
       "enabled": false
     },
     {
@@ -50,7 +55,7 @@
       "enabled": false
     },
     {
-      "description": "Held: go-git >=5.19 (via go-billy >=5.9) pulls filepath-securejoin up to v0.6.x, but argo-cd v2.14.x calls the top-level securejoin.MkdirAll that v0.5 moved out. Verified locally: build fails in argo-cd util/io/files. Needs its own group so it cannot red the non-major batch; revisit alongside the argo-cd v3 migration.",
+      "description": "Held: argo-cd v3.4 caps go-git at v5.14.0 upstream (\"DO NOT BUMP UNTIL go-git/go-git#1551 is fixed\" in its go.mod), so moving ahead of that puts us off the version argo-cd is tested against. The older filepath-securejoin conflict is gone — the v3 migration selects go-git 5.14.0 / go-billy 5.6.2 / securejoin 0.6.1 together. Needs its own group so it cannot red the non-major batch; revisit when upstream lifts its cap.",
       "groupName": "go-git",
       "groupSlug": "go-git",
       "matchPackageNames": [
@@ -60,7 +65,7 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Held: k3d v5.9 requires Go >=1.26.3 (module targets 1.25) and forces docker/docker v28, which the rule above disables. A minor bump that is really a toolchain change. Needs its own group so it cannot red the non-major batch.",
+      "description": "Held: k3d v5.9 requires Go >=1.26.3 (module targets 1.26.0) and forces docker/docker v28, which the rule above disables. A minor bump that is really a toolchain change. Needs its own group so it cannot red the non-major batch.",
       "groupName": "k3d",
       "groupSlug": "k3d",
       "matchPackageNames": ["github.com/k3d-io/k3d/v5"],
@@ -79,10 +84,7 @@
     {
       "description": "Pseudo-version deps churn on every upstream commit; batch them monthly. Needs its own group so the monthly schedule does not conflict with the weekly non-major group above.",
       "groupName": "argoproj pseudo-versions",
-      "matchPackageNames": [
-        "github.com/argoproj/gitops-engine",
-        "github.com/argoproj/pkg"
-      ],
+      "matchPackageNames": ["github.com/argoproj/pkg"],
       "schedule": ["before 6am on the first day of the month"]
     },
     {

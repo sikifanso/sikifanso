@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/alicanalbayrak/sikifanso/internal/argocd"
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/cilium"
 	"github.com/alicanalbayrak/sikifanso/internal/gitops"
 	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
@@ -79,6 +80,11 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 	// See: https://github.com/k3d-io/k3d/issues/1515
 	_ = os.Setenv("K3D_FIX_DNS", "0")
 
+	// The scaffold above deleted and recreated gitopsDir. On Docker Desktop that
+	// leaves the VM serving stale virtiofs dentries for it, which breaks the bind
+	// mount k3d is about to make. Heal the cache before creating the cluster.
+	prewarmGitOpsMount(ctx, log, gitopsDir, cfg.Platform.K3sImage)
+
 	log.Info("creating k3d cluster", zap.String("cluster", name))
 
 	np := cfg.Platform.NodePorts
@@ -100,7 +106,6 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 			{Port: fmt.Sprintf("%d:%d", hp.HTTP, np.HTTP), NodeFilters: []string{"server:*"}},
 			{Port: fmt.Sprintf("%d:%d", hp.HTTPS, np.HTTPS), NodeFilters: []string{"server:*"}},
 			{Port: fmt.Sprintf("%d:%d", hp.ArgoCDUI, np.ArgoCDUI), NodeFilters: []string{"server:*"}},
-			{Port: fmt.Sprintf("%d:%d", hp.ArgoCDGRPC, np.ArgoCDGRPC), NodeFilters: []string{"server:*"}},
 			{Port: fmt.Sprintf("%d:%d", hp.HubbleUI, np.HubbleUI), NodeFilters: []string{"server:*"}},
 		},
 		Volumes: []conf.VolumeWithNodeFilters{
@@ -175,8 +180,9 @@ func Create(ctx context.Context, log *zap.Logger, name string, opts Options) (*s
 		GitOpsPath:       gitopsDir,
 		Services: session.ServiceInfo{
 			ArgoCD: session.ArgoCDInfo{
+				// gRPC and REST share this port: ArgoCD multiplexes them, and
+				// grpcclient derives the gRPC host from this URL.
 				URL:          fmt.Sprintf("http://localhost:%d", hp.ArgoCDUI),
-				GRPCAddress:  fmt.Sprintf("localhost:%d", hp.ArgoCDGRPC),
 				Username:     "admin",
 				Password:     argocdResult.AdminPassword,
 				ChartVersion: argocdResult.ChartVersion,
@@ -227,7 +233,7 @@ func installInfra(ctx context.Context, log *zap.Logger, restCfg *rest.Config, na
 	// Wait for ArgoCD gRPC to be fully ready before creating Application CRDs.
 	// Deployment readiness probes pass before the gRPC listener and admission
 	// webhook are initialised, causing intermittent CreateApplications failures.
-	grpcAddr := fmt.Sprintf("localhost:%d", hp.ArgoCDGRPC)
+	grpcAddr := fmt.Sprintf("localhost:%d", hp.ArgoCDUI)
 	if err := argocd.WaitForGRPC(ctx, log, grpcAddr); err != nil {
 		return nil, fmt.Errorf("waiting for argocd gRPC: %w", err)
 	}
@@ -365,6 +371,19 @@ func Start(ctx context.Context, log *zap.Logger, name string) error {
 		sess.State = "running"
 		if err := session.Save(sess); err != nil {
 			log.Warn("failed to save session", zap.Error(err))
+		}
+
+		// k3d's WaitForServer above waits for the k3s API server, not for ArgoCD,
+		// whose pods are still starting. Meanwhile k3d's load balancer accepts TCP
+		// with no upstream, so a command run immediately after start dials a black
+		// hole and fails at its own timeout. Wait here instead, so `cluster start`
+		// does not report success before the next command can connect.
+		if addr, addrErr := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL); addrErr != nil {
+			log.Warn("could not derive argocd gRPC address", zap.Error(addrErr))
+		} else if err := argocd.WaitForGRPC(ctx, log, addr); err != nil {
+			// Non-fatal: the cluster is started either way, and reporting failure
+			// for a running cluster would be worse than a warning.
+			log.Warn("argocd gRPC not ready", zap.Error(err))
 		}
 	}
 
