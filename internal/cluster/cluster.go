@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/alicanalbayrak/sikifanso/internal/argocd"
+	"github.com/alicanalbayrak/sikifanso/internal/argocd/grpcclient"
 	"github.com/alicanalbayrak/sikifanso/internal/cilium"
 	"github.com/alicanalbayrak/sikifanso/internal/gitops"
 	"github.com/alicanalbayrak/sikifanso/internal/infraconfig"
@@ -370,6 +371,19 @@ func Start(ctx context.Context, log *zap.Logger, name string) error {
 		sess.State = "running"
 		if err := session.Save(sess); err != nil {
 			log.Warn("failed to save session", zap.Error(err))
+		}
+
+		// k3d's WaitForServer above waits for the k3s API server, not for ArgoCD,
+		// whose pods are still starting. Meanwhile k3d's load balancer accepts TCP
+		// with no upstream, so a command run immediately after start dials a black
+		// hole and fails at its own timeout. Wait here instead, so `cluster start`
+		// does not report success before the next command can connect.
+		if addr, addrErr := grpcclient.AddressFromURL(sess.Services.ArgoCD.URL); addrErr != nil {
+			log.Warn("could not derive argocd gRPC address", zap.Error(addrErr))
+		} else if err := argocd.WaitForGRPC(ctx, log, addr); err != nil {
+			// Non-fatal: the cluster is started either way, and reporting failure
+			// for a running cluster would be worse than a warning.
+			log.Warn("argocd gRPC not ready", zap.Error(err))
 		}
 	}
 

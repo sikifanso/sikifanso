@@ -142,8 +142,19 @@ func deploymentAvailable(dep *appsv1.Deployment) bool {
 }
 
 var (
-	grpcReadyTimeout  = 30 * time.Second
+	// grpcReadyTimeout is a ceiling, not a target: the wait returns as soon as the
+	// server answers, so a generous budget costs nothing on the happy path and only
+	// bounds the pathological one. The delay it has to cover scales with what else
+	// the cluster is running — measured on Docker Desktop, ArgoCD first answers ~25s
+	// after `cluster start` on an empty cluster, and materially longer once catalog
+	// apps are deployed. The old 30s could not cover a loaded cluster. A fixed
+	// constant is still a guess; see #54.
+	grpcReadyTimeout  = 180 * time.Second
 	grpcRetryInterval = 2 * time.Second
+	// grpcProbeTimeout bounds a single attempt, so one that stalls against a black
+	// hole is abandoned and retried with a fresh client instead of consuming the
+	// whole budget. Generous enough for a real handshake on a loaded cluster.
+	grpcProbeTimeout = 5 * time.Second
 )
 
 // WaitForGRPC polls the ArgoCD Version endpoint until the gRPC server
@@ -156,55 +167,43 @@ func WaitForGRPC(ctx context.Context, log *zap.Logger, addr string) error {
 
 	log.Info("waiting for ArgoCD gRPC server", zap.String("addr", addr))
 
-	// apiclient.NewClient is not the cheap constructor it looks like: it eagerly
-	// probes the Version endpoint to decide whether gRPC-web is needed, and that
-	// probe hardcodes context.Background() upstream (NewVersionClient → newConn →
-	// waitForReady). A refused connection fails fast, but an address that accepts
-	// TCP and never completes the HTTP/2 handshake — a k3d host port mapped to a
-	// NodePort no service claims, say — blocks it forever. Race it against ctx so
-	// grpcReadyTimeout is honoured; a stuck goroutine dies with the process.
-	type clientResult struct {
-		client apiclient.Client
-		err    error
-	}
-	created := make(chan clientResult, 1)
-	go func() {
-		c, err := apiclient.NewClient(&apiclient.ClientOptions{
-			ServerAddr: addr,
-			Insecure:   true,
-			PlainText:  true,
-		})
-		created <- clientResult{client: c, err: err}
-	}()
-
-	var client apiclient.Client
-	select {
-	case res := <-created:
-		if res.err != nil {
-			return fmt.Errorf("creating ArgoCD probe client: %w", res.err)
-		}
-		client = res.client
-	case <-ctx.Done():
-		return fmt.Errorf("timed out waiting for ArgoCD gRPC at %s", addr)
-	}
-
 	for {
-		// probeVersion can block past ctx: NewVersionClient dials without taking
-		// a context, so an address that accepts TCP but never completes the HTTP/2
-		// handshake (a k3d port mapped to an unclaimed NodePort, say) would hang
-		// forever. Race each probe against ctx so the timeout is always honoured.
+		// Two things have to be true for this loop to make progress against k3d's
+		// load balancer, which accepts TCP with no upstream while ArgoCD starts:
+		//
+		//  1. Every attempt builds a *fresh* client. apiclient.NewClient eagerly probes
+		//     Version to decide whether gRPC-web is needed, and that decision is baked
+		//     in. A client built during the dead window never recovers, so reusing one
+		//     — as this loop used to — retries a permanently broken client until the
+		//     budget expires, however large the budget is.
+		//  2. Every attempt is *individually* bounded. Both the construction and the
+		//     probe hardcode context.Background() upstream (NewVersionClient → newConn
+		//     → waitForReady), so against a black hole they block forever. Racing only
+		//     against the overall ctx is not enough: the first attempt then absorbs the
+		//     whole budget and no retry ever happens.
+		//
+		// Together these are why `cluster start` looked like a too-short timeout (#54)
+		// rather than a stuck probe. An abandoned attempt leaks its goroutine until the
+		// process exits; bounded by grpcReadyTimeout/grpcRetryInterval, that is a handful
+		// for a short-lived CLI.
+		attemptCtx, cancelAttempt := context.WithTimeout(ctx, grpcProbeTimeout)
 		result := make(chan error, 1)
-		go func() { result <- probeVersion(ctx, client) }()
+		go func() { result <- probeVersion(attemptCtx, addr) }()
 
 		select {
 		case err := <-result:
+			cancelAttempt()
 			if err == nil {
 				log.Info("ArgoCD gRPC server is ready")
 				return nil
 			}
 			log.Debug("ArgoCD gRPC probe failed, retrying", zap.Error(err))
-		case <-ctx.Done():
-			return fmt.Errorf("timed out waiting for ArgoCD gRPC at %s", addr)
+		case <-attemptCtx.Done():
+			cancelAttempt()
+			if ctx.Err() != nil {
+				return fmt.Errorf("timed out waiting for ArgoCD gRPC at %s", addr)
+			}
+			log.Debug("ArgoCD gRPC probe stalled, retrying with a fresh client")
 		}
 
 		select {
@@ -215,10 +214,20 @@ func WaitForGRPC(ctx context.Context, log *zap.Logger, addr string) error {
 	}
 }
 
-// probeVersion issues a single unauthenticated Version call on an existing
-// client. Version is the lightest ArgoCD gRPC endpoint and requires no auth
-// token, making it safe to call before credentials are used.
-func probeVersion(ctx context.Context, c apiclient.Client) error {
+// probeVersion builds a client and issues a single unauthenticated Version call.
+// Version is the lightest ArgoCD gRPC endpoint and requires no auth token, making
+// it safe to call before credentials are used. The client is built per call rather
+// than shared: see WaitForGRPC for why a reused client cannot recover.
+func probeVersion(ctx context.Context, addr string) error {
+	c, err := apiclient.NewClient(&apiclient.ClientOptions{
+		ServerAddr: addr,
+		Insecure:   true,
+		PlainText:  true,
+	})
+	if err != nil {
+		return err
+	}
+
 	conn, versionClient, err := c.NewVersionClient()
 	if err != nil {
 		return err

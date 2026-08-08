@@ -580,9 +580,12 @@ release, so an MCP-driven run would have exercised the pre-migration binary.
 | 3 | `app enable postgresql` | exit 0, 88.6 s |
 | 4 | `cluster doctor` | 8/8 checks ok |
 | 5 | `cluster stop` → `cluster start` | exit 0 / exit 0 |
-| 6 | `app status argocd` right after start | **failed — 30 s timeout** (see below) |
+| 6 | `app status argocd` right after start | **failed — 30 s timeout** → defect 6, fixed below |
 | 7 | `cluster delete` → immediate `cluster create` | exit 0 / exit 0, 1 m 40 s |
 | 8 | `cluster delete` | exit 0, no containers left |
+
+Step 6 was fixed on this branch and the whole sequence re-run; see the defect-6 write-up and
+the final results table at the end of this section.
 
 Step 3 confirms the dependency cascade and tier sequencing: `postgresql` auto-enabled
 `cnpg-operator` and `prometheus-stack`, and the sync watched tier `0-operators` to completion
@@ -591,22 +594,64 @@ Step 3 confirms the dependency cascade and tier sequencing: `postgresql` auto-en
 Step 7 confirms defect 4 is fixed — the delete-then-create cycle that previously failed
 reproducibly now completes with no `error while creating mount source path`.
 
-### Step 6: `cluster start` does not wait for ArgoCD
+### Step 6 (defect 6): `WaitForGRPC` could never observe a server that came up late
 
-`app status argocd` run immediately after `cluster start` fails at exactly the dial timeout:
+`app status argocd` run immediately after `cluster start` failed at exactly the dial timeout:
 
 ```
 Error: timed out connecting to ArgoCD gRPC at localhost:56415 after 30s
 ```
 
-Retried ~15 s later it returns in 0.70 s. So this is the defect-3 fix behaving exactly as
-designed — the 10-minute hang is gone — but the underlying gap is untouched: `cluster.Start`
-calls `k3dclient.ClusterStart` with `WaitForServer: true`, which waits for the **k3s API
-server**, not for ArgoCD. `cluster.Create` calls `argocd.WaitForGRPC` before returning;
-`Start` never has, on this branch or on `main`. `cluster start` therefore reports success
-while the next command cannot yet connect.
+Retried ~15 s later it returned in 0.70 s. The obvious reading — "the 30 s budget is a little
+short", i.e. #54 — is wrong, and chasing it produced the useful evidence. Raising the wait
+budget 30 s → 90 s → 180 s changed nothing: each run timed out at *exactly* the budget while a
+freshly built client connected in 1 s. A wait that fails for any budget is not a slow server.
 
-Pre-existing and independent of this migration, which strictly improved the symptom (silent
-10-minute hang → bounded 30 s error with a clear message). Tracked separately; the obvious fix
-is for `Start` to call `WaitForGRPC` the way `Create` does. Related to #54 (hardcoded
-provisioning wait timeouts).
+Two compounding defects in `WaitForGRPC`:
+
+1. **Stale client.** `apiclient.NewClient` was called once *before* the retry loop. It eagerly
+   probes Version to decide whether gRPC-web is needed and bakes that decision in, so a client
+   built while ArgoCD was still down never recovers — the loop then retried a permanently
+   broken client until the budget expired. On `cluster start` that is the normal case.
+2. **Unbounded attempts.** Each probe was raced only against the *overall* context. Against
+   k3d's load balancer — which accepts TCP with no upstream while ArgoCD starts — the first
+   probe blocks forever, absorbing the entire budget, so no retry ever ran.
+
+Fixed: build a fresh client per attempt, and bound each attempt with `grpcProbeTimeout` (5 s)
+so a stalled one is abandoned and retried. `grpcReadyTimeout` also raised to 180 s — a ceiling,
+not a target, since the wait returns as soon as the server answers.
+
+A third gap sat underneath: `cluster.Start` never called `WaitForGRPC` at all, on this branch
+or on `main`. `k3dclient.ClusterStart{WaitForServer: true}` waits for the **k3s API server**,
+not ArgoCD, so `cluster start` reported success while the next command could not connect.
+`Create` has always waited; `Start` now does too, non-fatally — the cluster is started either
+way, and failing a running cluster would be worse than a warning.
+
+Measured after the fix, on a cluster with three catalog apps: the wait reports
+`ArgoCD gRPC server is ready` after 35 s, `cluster start` returns in 47 s, and `app status`
+immediately afterwards succeeds in 1 s.
+
+Why the existing tests missed it: `TestWaitForGRPC_DelayedStart` closes the port, so dials are
+*refused* and fail fast, leaving the client healthy. The production condition is a black hole
+that accepts TCP and never answers, which poisons the client instead.
+`TestWaitForGRPC_BlackHoleThenReady` now models that — and it earned its keep by failing
+against the first attempted fix, proving fresh clients alone were not sufficient.
+
+### Final acceptance run — all steps pass
+
+Full sequence re-run against a binary built from the branch HEAD with the defect-6 fixes:
+
+| # | Step | Result |
+|---|------|--------|
+| 1 | `cluster create -c v3check` | exit 0 |
+| 2 | `app status argocd` right after create | exit 0, 1 s |
+| 3 | `app enable postgresql` | exit 0; `0-operators` 15:01:46 → `1-data` 15:02:44 |
+| 4 | `cluster doctor` | exit 0, 8/8 ok |
+| 5 | `cluster stop` → `cluster start` | exit 0 / exit 0, 40 s |
+| 6 | `app status argocd` right after start | **exit 0, 3 s** |
+| 7 | `cluster delete` → immediate `cluster create` | exit 0 / exit 0, 100 s |
+| 8 | `cluster delete` | exit 0, 0 containers left |
+
+The `cluster start` in step 5 logged `ArgoCD gRPC server is ready` after 28 s — the wait now
+observes readiness instead of exhausting its budget, and `start` returns only once the next
+command can connect.

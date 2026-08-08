@@ -3,6 +3,7 @@ package argocd
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -69,6 +70,91 @@ func TestWaitForGRPC_Timeout(t *testing.T) {
 // mapped to a NodePort no service claims — the dial appears to succeed and the
 // gRPC handshake never finishes. WaitForGRPC must still honour its timeout
 // rather than hang, so the caller gets a diagnosable error.
+// TestWaitForGRPC_BlackHoleThenReady reproduces what k3d's load balancer actually
+// does while ArgoCD is starting: accept TCP without ever completing the HTTP/2
+// handshake, then serve real gRPC on the same port once the pod is up.
+//
+// TestWaitForGRPC_DelayedStart does not cover this. It closes the port, so dials are
+// refused and fail fast, leaving the client healthy. A black hole instead poisons any
+// client constructed during the dead window — apiclient.NewClient eagerly probes
+// Version to choose its transport, and that choice sticks. WaitForGRPC must therefore
+// build a fresh client per attempt; reusing one makes the wait fail for its entire
+// budget while a new client connects immediately, which is what happened on
+// `cluster start` in acceptance testing.
+func TestWaitForGRPC_BlackHoleThenReady(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	tl, ok := lis.(*net.TCPListener)
+	if !ok {
+		t.Fatalf("expected *net.TCPListener, got %T", lis)
+	}
+	addr := tl.Addr().String()
+
+	var mu sync.Mutex
+	var held []net.Conn
+	switched := make(chan struct{})
+	rawDone := make(chan struct{})
+
+	// Phase 1: accept connections and never answer.
+	go func() {
+		defer close(rawDone)
+		for {
+			select {
+			case <-switched:
+				return
+			default:
+			}
+			_ = tl.SetDeadline(time.Now().Add(50 * time.Millisecond))
+			conn, err := tl.Accept()
+			if err != nil {
+				continue // deadline expired; re-check switched
+			}
+			mu.Lock()
+			held = append(held, conn)
+			mu.Unlock()
+		}
+	}()
+
+	srv := grpc.NewServer()
+	versionpkg.RegisterVersionServiceServer(srv, &fakeVersionServer{})
+	t.Cleanup(func() {
+		srv.Stop()
+		mu.Lock()
+		for _, c := range held {
+			_ = c.Close()
+		}
+		mu.Unlock()
+	})
+
+	// Phase 2: stop black-holing and serve gRPC on the same listener.
+	go func() {
+		time.Sleep(2 * time.Second)
+		close(switched)
+		<-rawDone
+		_ = tl.SetDeadline(time.Time{})
+		_ = srv.Serve(tl)
+	}()
+
+	origTimeout := grpcReadyTimeout
+	grpcReadyTimeout = 30 * time.Second
+	defer func() { grpcReadyTimeout = origTimeout }()
+
+	// Bound the test: on a regression WaitForGRPC burns its whole budget.
+	returned := make(chan error, 1)
+	go func() { returned <- WaitForGRPC(context.Background(), zaptest.NewLogger(t), addr) }()
+
+	select {
+	case err := <-returned:
+		if err != nil {
+			t.Fatalf("WaitForGRPC should recover once the listener starts serving: %v", err)
+		}
+	case <-time.After(45 * time.Second):
+		t.Fatal("WaitForGRPC never returned")
+	}
+}
+
 func TestWaitForGRPC_UnresponsiveListener(t *testing.T) {
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
