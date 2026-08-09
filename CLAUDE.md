@@ -90,6 +90,43 @@ The bootstrap template repo is cloned during `cluster create` (`internal/gitops/
 
 Trust code over `docs/`: the docs still describe a dual-track (two-AppSet) model and a webhook-based sync that no longer exists, and document positional cluster-name args that `rejectPositionalArgs` now rejects.
 
+## Design Specs
+
+Substantial designs are committed as `docs/specs/<date>-issue-<N>-<slug>.md` before
+implementation starts. Follow the house style of the existing specs in that directory:
+Problem (with `file:line` evidence) → Findings (each labelled `[verified]` or `[inferred]`,
+external facts carrying a URL *and* the version they apply to) → Alternatives considered →
+Design → Implementation plan → Test plan → Risks & open questions.
+
+Specs carry a `**Status:**` header that gates the work: `Draft` → `Approved` → `Implemented`.
+Do not start implementing against a `Draft` spec without the maintainer's approval, and do not
+silently redesign an `Approved` one — if a spec assumption turns out to be false, stop and
+report rather than improvising a replacement design.
+
+### Verification limits in agent sessions
+
+**Remote and sandboxed sessions cannot run Docker or k3d.** Test plans must separate what
+`make build && make test && make lint` can verify from what needs a real cluster on the
+maintainer's machine. Never claim a cluster-dependent item is verified — list it explicitly
+as manual verification pending, with the exact commands to run.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `sikifanso/sikifanso`, driven via the `gh` CLI; `#49` is
+Renovate's bot-managed dashboard and is excluded from triage. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles use their default label strings (`needs-triage`, `needs-info`,
+`ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` at the root, with `docs/adr/` created lazily. See
+`docs/agents/domain.md`.
+
 ## Commit Messages
 
 Do not add `Co-Authored-By` or bot signature lines to commit messages.
