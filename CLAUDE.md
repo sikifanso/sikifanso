@@ -35,7 +35,7 @@ It used to run `sikifanso` from PATH, which silently served whatever release hap
 - `syncAfterMutation` — post-mutation ArgoCD sync (enable/disable/add/remove). **Non-fatal**: if the gRPC client can't be built it warns and returns nil — the gitops commit has already happened, so a successful command does not guarantee a deployed app
 - `rejectPositionalArgs` — cluster targeting is `--cluster/-c` only; positional names are rejected
 
-**Cluster creation flow** (`internal/cluster/cluster.go`): resolve ports → remove stale session dir → scaffold gitops repo → create k3d cluster (gitops dir hostPath-mounted at `/local-gitops` on all nodes) → install Cilium → install ArgoCD → `WaitForGRPC` → imperatively create `cilium`/`argocd` Application CRDs → apply `root-app.yaml` → wait for infra healthy → apply `root-catalog.yaml` + `root-agents.yaml`. k3s runs with flannel, kube-proxy, network-policy, traefik, and servicelb disabled — **Cilium is mandatory**; a cluster without it has no networking.
+**Cluster creation flow** (`internal/cluster/cluster.go`): resolve ports → remove stale session dir → scaffold gitops repo → create k3d cluster (gitops dir hostPath-mounted at `/local-gitops` on all nodes) → install Cilium → install ArgoCD → `WaitForGRPC` → imperatively create `cilium`/`argocd` Application CRDs → apply `root-app.yaml` → wait for infra healthy → apply `root-catalog.yaml` + `root-agents.yaml`. k3s runs with flannel, network-policy, traefik, and servicelb disabled — **Cilium is mandatory**; a cluster without it has no networking. kube-proxy is *not* disabled: Cilium runs `kubeProxyReplacement: true` alongside it, so both are installed.
 
 **Triple-track app model** — three ApplicationSets in the bootstrap repo generate Applications from gitops files:
 
