@@ -35,7 +35,7 @@ It used to run `sikifanso` from PATH, which silently served whatever release hap
 - `syncAfterMutation` — post-mutation ArgoCD sync (enable/disable/add/remove). **Non-fatal**: if the gRPC client can't be built it warns and returns nil — the gitops commit has already happened, so a successful command does not guarantee a deployed app
 - `rejectPositionalArgs` — cluster targeting is `--cluster/-c` only; positional names are rejected
 
-**Cluster creation flow** (`internal/cluster/cluster.go`): resolve ports → remove stale session dir → scaffold gitops repo → create k3d cluster (gitops dir hostPath-mounted at `/local-gitops` on all nodes) → install Cilium → install ArgoCD → `WaitForGRPC` → imperatively create `cilium`/`argocd` Application CRDs → apply `root-app.yaml` → wait for infra healthy → apply `root-catalog.yaml` + `root-agents.yaml`. k3s runs with flannel, kube-proxy, network-policy, traefik, and servicelb disabled — **Cilium is mandatory**; a cluster without it has no networking.
+**Cluster creation flow** (`internal/cluster/cluster.go`): resolve ports → remove stale session dir → scaffold gitops repo → create k3d cluster (gitops dir hostPath-mounted at `/local-gitops` on all nodes) → install Cilium → install ArgoCD → `WaitForGRPC` → imperatively create `cilium`/`argocd` Application CRDs → apply `root-app.yaml` → wait for infra healthy → apply `root-catalog.yaml` + `root-agents.yaml`. k3s runs with flannel, network-policy, traefik, and servicelb disabled — **Cilium is mandatory**; a cluster without it has no networking. kube-proxy is *not* disabled: Cilium runs `kubeProxyReplacement: true` alongside it, so both are installed.
 
 **Triple-track app model** — three ApplicationSets in the bootstrap repo generate Applications from gitops files:
 
@@ -89,6 +89,43 @@ The bootstrap template repo is cloned during `cluster create` (`internal/gitops/
 ## Known Doc Drift
 
 Trust code over `docs/`: the docs still describe a dual-track (two-AppSet) model and a webhook-based sync that no longer exists, and document positional cluster-name args that `rejectPositionalArgs` now rejects.
+
+## Design Specs
+
+Substantial designs are committed as `docs/specs/<date>-issue-<N>-<slug>.md` before
+implementation starts. Follow the house style of the existing specs in that directory:
+Problem (with `file:line` evidence) → Findings (each labelled `[verified]` or `[inferred]`,
+external facts carrying a URL *and* the version they apply to) → Alternatives considered →
+Design → Implementation plan → Test plan → Risks & open questions.
+
+Specs carry a `**Status:**` header that gates the work: `Draft` → `Approved` → `Implemented`.
+Do not start implementing against a `Draft` spec without the maintainer's approval, and do not
+silently redesign an `Approved` one — if a spec assumption turns out to be false, stop and
+report rather than improvising a replacement design.
+
+### Verification limits in agent sessions
+
+**Remote and sandboxed sessions cannot run Docker or k3d.** Test plans must separate what
+`make build && make test && make lint` can verify from what needs a real cluster on the
+maintainer's machine. Never claim a cluster-dependent item is verified — list it explicitly
+as manual verification pending, with the exact commands to run.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `sikifanso/sikifanso`, driven via the `gh` CLI; `#49` is
+Renovate's bot-managed dashboard and is excluded from triage. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles use their default label strings (`needs-triage`, `needs-info`,
+`ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` at the root, with `docs/adr/` created lazily. See
+`docs/agents/domain.md`.
 
 ## Commit Messages
 
