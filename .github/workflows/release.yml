@@ -62,6 +62,7 @@ jobs:
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          FAILED=0
           SUBMISSION_IDS=()
 
           # Submit all binaries in parallel (no --wait)
@@ -74,24 +75,38 @@ jobs:
             ZIP_FILE="${bin}.zip"
             ditto -c -k "$bin" "$ZIP_FILE"
 
+            # notarytool writes its diagnostics to the captured output, so under
+            # `bash -e` a failed submit aborts the step before the echo below and
+            # the reason dies with the subshell. Take the exit code by hand.
+            set +e
             SUBMIT_OUT=$(xcrun notarytool submit "$ZIP_FILE" \
               --apple-id "$APPLE_ID" \
               --password "$APPLE_ID_PASSWORD" \
               --team-id "$APPLE_TEAM_ID" 2>&1)
+            SUBMIT_RC=$?
+            set -e
 
             echo "$SUBMIT_OUT"
-            SUBMISSION_ID=$(echo "$SUBMIT_OUT" | grep "id:" | head -1 | awk '{print $2}')
-            if [ -n "$SUBMISSION_ID" ]; then
-              SUBMISSION_IDS+=("$SUBMISSION_ID")
+            rm "$ZIP_FILE"
+
+            if [ "$SUBMIT_RC" -ne 0 ]; then
+              echo "::error::notarytool submit failed for $bin (exit $SUBMIT_RC)"
+              FAILED=1
+              continue
             fi
 
-            rm "$ZIP_FILE"
+            SUBMISSION_ID=$(echo "$SUBMIT_OUT" | grep "id:" | head -1 | awk '{print $2}')
+            if [ -z "$SUBMISSION_ID" ]; then
+              echo "::error::no submission id in notarytool output for $bin"
+              FAILED=1
+              continue
+            fi
+            SUBMISSION_IDS+=("$SUBMISSION_ID")
           done
 
           echo "=== Waiting for ${#SUBMISSION_IDS[@]} submissions ==="
 
           # Wait for all submissions with retries
-          FAILED=0
           for SID in "${SUBMISSION_IDS[@]}"; do
             echo "--- Waiting for $SID ---"
             for attempt in 1 2 3; do
