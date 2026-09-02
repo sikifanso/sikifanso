@@ -6,9 +6,9 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/argoproj/argo-cd/v3 v3.4.5
 	github.com/briandowns/spinner v1.23.2
-	github.com/charmbracelet/bubbles v1.0.0
-	github.com/charmbracelet/bubbletea v1.3.10
-	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/charmbracelet/bubbles/v2 v2.2.1
+	github.com/charmbracelet/bubbletea/v2 v2.0.9
+	github.com/charmbracelet/lipgloss/v2 v2.0.6
 	github.com/docker/docker v27.0.3+incompatible
 	github.com/fatih/color v1.18.0
 	github.com/go-git/go-git/v5 v5.14.0
