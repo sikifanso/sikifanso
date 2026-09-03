@@ -22,11 +22,11 @@ require (
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
-	helm.sh/helm/v3 v3.19.5
-	k8s.io/api v0.34.2
-	k8s.io/apimachinery v0.34.2
-	k8s.io/client-go v0.34.2
-	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
+	helm.sh/helm/v3 v3.21.4
+	k8s.io/api v0.37.0
+	k8s.io/apimachinery v0.37.0
+	k8s.io/client-go v0.37.0
+	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -300,20 +300,20 @@ require (
 // which is what IDE project sync runs) fails without them. Keep these on the same
 // version as the rest of the k8s.io family.
 replace (
-	k8s.io/cloud-provider => k8s.io/cloud-provider v0.34.2
-	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.34.2
-	k8s.io/cri-client => k8s.io/cri-client v0.34.2
-	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.34.2
-	k8s.io/dynamic-resource-allocation => k8s.io/dynamic-resource-allocation v0.34.2
-	k8s.io/endpointslice => k8s.io/endpointslice v0.34.2
-	k8s.io/externaljwt => k8s.io/externaljwt v0.34.2
-	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.34.2
-	k8s.io/kube-proxy => k8s.io/kube-proxy v0.34.2
-	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.34.2
-	k8s.io/kubelet => k8s.io/kubelet v0.34.2
-	k8s.io/mount-utils => k8s.io/mount-utils v0.34.2
-	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.34.2
-	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.34.2
+	k8s.io/cloud-provider => k8s.io/cloud-provider v0.37.0
+	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.37.0
+	k8s.io/cri-client => k8s.io/cri-client v0.37.0
+	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.37.0
+	k8s.io/dynamic-resource-allocation => k8s.io/dynamic-resource-allocation v0.37.0
+	k8s.io/endpointslice => k8s.io/endpointslice v0.37.0
+	k8s.io/externaljwt => k8s.io/externaljwt v0.37.0
+	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.37.0
+	k8s.io/kube-proxy => k8s.io/kube-proxy v0.37.0
+	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.37.0
+	k8s.io/kubelet => k8s.io/kubelet v0.37.0
+	k8s.io/mount-utils => k8s.io/mount-utils v0.37.0
+	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.37.0
+	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.37.0
 )
 
 // argo-cd v3.3+ vendors gitops-engine as an untagged nested module and pins it with a
