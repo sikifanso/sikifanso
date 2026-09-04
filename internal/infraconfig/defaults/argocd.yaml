@@ -1,6 +1,6 @@
 repoURL: https://argoproj.github.io/argo-helm
 chart: argo-cd
 # renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
-targetRevision: "10.2.1"
+targetRevision: "10.8.0"
 namespace: argocd
 releaseName: argocd
